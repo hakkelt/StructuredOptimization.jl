@@ -2,22 +2,13 @@
 extract_variables(t::TermOrExpr) = variables(t) 
 
 function extract_variables(t::NTuple{N,TermOrExpr}) where {N}
-  x = variables.(t)
-  xAll = x[1]
-  for i = 2:length(x)
-    for xi in x[i]
-      if (xi in xAll) == false
-        xAll = (xAll...,xi)
-      end
-    end
-  end
-  return xAll
+  return tuple(unique(variables.(t))...)
 end
 
 # extract functions from terms
 function extract_functions(t::Term)
-  f = displacement(t) == 0 ? t.f : PrecomposeDiagonal(t.f, 1.0, displacement(t)) #for now I keep this
-  f = t.lambda == 1. ? f : Postcompose(f, t.lambda)                                  #for now I keep this
+  f = displacement(t) == 0 ? t.f : PrecomposeDiagonal(t.f, one(t.lambda), displacement(t)) #for now I keep this
+  f = t.lambda == 1 ? f : Postcompose(f, t.lambda)                                  #for now I keep this
   #TODO change this
   return f
 end
@@ -26,7 +17,7 @@ extract_functions(t::Tuple{Term}) = extract_functions(t[1])
 
 # extract functions from terms without displacement
 function extract_functions_nodisp(t::Term)
-  f = t.lambda == 1. ? t.f : Postcompose(t.f, t.lambda)
+  f = t.lambda == 1 ? t.f : Postcompose(t.f, t.lambda)
   return f
 end
 extract_functions_nodisp(t::NTuple{N,Term}) where {N} = SeparableSum(extract_functions_nodisp.(t))

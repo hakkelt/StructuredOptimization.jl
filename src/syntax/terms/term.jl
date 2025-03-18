@@ -7,7 +7,7 @@ end
 
 function Term(f, ex::AbstractExpression)
     A = convert(Expression,ex)
-    Term(1,f, A)
+    Term(one(real(codomainType(affine(A)))),f, A)
 end
 
 # Operations
@@ -19,8 +19,8 @@ import Base: +
 (+)(a::Term,b::Term) = (a,b)
 (+)(a::NTuple{N,Term},b::Term)    where {N} = (a...,b)
 (+)(a::Term,b::NTuple{N,Term})    where {N} = (a,b...)
-(+)(a::NTuple{N,Term},b::Tuple{}) where {N} = a
-(+)(a::Tuple{},b::NTuple{N,Term}) where {N} = b
+(+)(a::NTuple{N,Term},::Tuple{}) where {N} = a
+(+)(::Tuple{},b::NTuple{N,Term}) where {N} = b
 (+)(a::NTuple{N,Term},b::NTuple{M,Term}) where {N,M} = (a...,b...)
 
 # Define multiplication by constant
