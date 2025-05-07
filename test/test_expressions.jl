@@ -316,3 +316,15 @@ ex3 = ex1-ex2
 @test_throws DimensionMismatch MatrixOp(randn(10,20))*Variable(20)+randn(11)
 @test_throws ErrorException MatrixOp(randn(10,20))*Variable(20)+(3+im)
 
+# Advanced (+) sum
+x, y, z, w = Variable(10), Variable(20), Variable(30), Variable(40)
+~x, ~y, ~z, ~w = rand(10), rand(20), rand(30), rand(40)
+A = randn(10,10)
+exA = (z[1:10]+x)+3*(x+z[1:10])+A*(w[1:10]+z[1:10])+(z[1:10]+w[1:10])
+exB = 5*w[1:10]+z[1:10]+z[1:10]+3*y[1:10]+z[1:10]
+exC = exA+exB
+op = operator(exC)
+output = op*(~x,~y,~z,~w)
+expected_output = 4*~x+3*~y[1:10]+8*~z[1:10]+6*~w[1:10]+A*(~w[1:10]+~z[1:10])
+@test norm(output-expected_output) < 1e-12
+

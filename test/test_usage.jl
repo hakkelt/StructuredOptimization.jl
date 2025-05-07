@@ -5,7 +5,7 @@ Random.seed!(0)
 ################################################################################
 
 println("Testing: regularized least squares, with two variable blocks to make things weird")
-
+begin
 m, n1, n2 = 30, 50, 100
 
 A1 = randn(m, n1)
@@ -20,6 +20,7 @@ lam2 = 1.0
 x1_fpg = Variable(n1)
 x2_fpg = Variable(n2)
 expr = ls(A1*x1_fpg + A2*x2_fpg - b) + lam1*norm(x1_fpg, 1) + lam2*norm(x2_fpg, 2)
+end
 prob = problem(expr)
 @time sol = solve(prob, PANOCplus(tol=1e-10, verbose=false,maxit=20000))
 

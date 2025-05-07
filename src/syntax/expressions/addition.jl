@@ -48,14 +48,14 @@ function (+)(a::AbstractExpression, b::AbstractExpression)
   A = convert(Expression,a)
   B = convert(Expression,b)
 	if variables(A) == variables(B)
-    return Expression{length(A.x)}(A.x,affine(A)+affine(B))
+    return Expression(A.x,affine(A)+affine(B))
 	else
 		opA = affine(A)
 		xA = variables(A)
 		opB = affine(B)
 		xB = variables(B)
     xNew, opNew = Usum_op(xA,xB,opA,opB,true)
-    return Expression{length(xNew)}(xNew,opNew)
+    return Expression(xNew,opNew)
 	end
 end
 # sum expressions
@@ -64,14 +64,14 @@ function (-)(a::AbstractExpression, b::AbstractExpression)
   A = convert(Expression,a)
   B = convert(Expression,b)
 	if variables(A) == variables(B)
-    return Expression{length(A.x)}(A.x,affine(A)-affine(B))
+    return Expression(A.x,affine(A)-affine(B))
 	else
 		opA = affine(A)
 		xA = variables(A)
 		opB = affine(B)
 		xB = variables(B)
     xNew, opNew = Usum_op(xA,xB,opA,opB,false)
-    return Expression{length(xNew)}(xNew,opNew)
+    return Expression(xNew,opNew)
 	end
 end
 
@@ -112,7 +112,7 @@ function Usum_op(xA::Tuple{Variable}, xB::NTuple{N,Variable}, A::AbstractOperato
 end
 
 #unsigned sum: HCAT+HCAT
-function Usum_op(xA::NTuple{NA,Variable}, xB::NTuple{NB,Variable}, A::HCAT{NB}, B::HCAT{NB}, sign::Bool) where {NA,NB}
+function Usum_op(xA::NTuple{NA,Variable}, xB::NTuple{NB,Variable}, A::HCAT{NA}, B::HCAT{NB}, sign::Bool) where {NA,NB}
 	xNew = xA
 	opNew = A
 	for i in eachindex(xB)
@@ -129,6 +129,20 @@ function Usum_op(
 		Z = Zeros(A)       #this will be an HCAT
     xNew, opNew = Usum_op(xA,xB,Z,B,sign)
 		opNew += A
+	else
+    xNew  = (xA...,xB...)
+    opNew = sign ? hcat(A,B) : hcat(A,-B)
+	end
+	return xNew, opNew
+end
+
+function Usum_op(
+	xA::Tuple{Variable}, xB::NTuple{N,Variable}, A::AbstractOperator, B::AbstractOperator, sign::Bool
+) where {N}
+	if xA[1] in xB
+		Z = Zeros(B)       #this will be an HCAT
+    xNew, opNew = Usum_op(xA,xB,A,Z,sign)
+		opNew += B
 	else
     xNew  = (xA...,xB...)
     opNew = sign ? hcat(A,B) : hcat(A,-B)
@@ -170,19 +184,19 @@ julia> ex + b
 """
 function (+)(a::AbstractExpression, b::Union{AbstractArray,Number})
   A = convert(Expression,a)
-  return Expression{length(A.x)}(A.x,AffineAdd(affine(A),b))
+  return Expression(A.x,AffineAdd(affine(A),b))
 end
 
 (+)(a::Union{AbstractArray,Number}, b::AbstractExpression) = b+a
 
 function (-)(a::AbstractExpression, b::Union{AbstractArray,Number})
   A = convert(Expression,a)
-  return Expression{length(A.x)}(A.x,AffineAdd(affine(A),b,false))
+  return Expression(A.x,AffineAdd(affine(A),b,false))
 end
 
 function (-)(a::Union{AbstractArray,Number}, b::AbstractExpression)
   B = convert(Expression,b)
-  return Expression{length(B.x)}(B.x,-AffineAdd(affine(B),a))
+  return Expression(B.x,-AffineAdd(affine(B),a))
 end
 # sum with array/scalar
 
@@ -193,10 +207,10 @@ function Broadcast.broadcasted(::typeof(+),a::AbstractExpression, b::AbstractExp
   B = convert(Expression,b)
   if size(affine(A),1) != size(affine(B),1)
     if prod(size(affine(A),1)) > prod(size(affine(B),1))
-      B = Expression{length(B.x)}(variables(B),
+      B = Expression(variables(B),
                                   BroadCast(affine(B),size(affine(A),1)))
     elseif prod(size(affine(B),1)) > prod(size(affine(A),1))
-      A = Expression{length(A.x)}(variables(A),
+      A = Expression(variables(A),
                                   BroadCast(affine(A),size(affine(B),1)))
 		end
     return A+B
@@ -209,10 +223,10 @@ function Broadcast.broadcasted(::typeof(-),a::AbstractExpression, b::AbstractExp
   B = convert(Expression,b)
   if size(affine(A),1) != size(affine(B),1)
     if prod(size(affine(A),1)) > prod(size(affine(B),1))
-      B = Expression{length(B.x)}(variables(B),
+      B = Expression(variables(B),
                                   BroadCast(affine(B),size(affine(A),1)))
     elseif prod(size(affine(B),1)) > prod(size(affine(A),1))
-      A = Expression{length(A.x)}(variables(A),
+      A = Expression(variables(A),
                                   BroadCast(affine(A),size(affine(B),1)))
 		end
     return A-B

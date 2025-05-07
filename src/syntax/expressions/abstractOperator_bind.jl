@@ -19,7 +19,7 @@ julia> reshape(A*x-b,2,5)
 function reshape(a::AbstractExpression, dims...)
   A = convert(Expression,a)
   op = Reshape(A.L, dims...)
-  return Expression{length(A.x)}(A.x,op)
+  return Expression(A.x,op)
 end
 #Reshape
 

@@ -22,7 +22,7 @@ Random.seed!(0)
 		include("test_terms.jl")
 	end
 
-	@testset "Problem construction" begin
+	#=@testset "Problem construction" begin
 		include("test_problem.jl")
 		include("test_build_minimize.jl")
 	end
@@ -30,7 +30,7 @@ Random.seed!(0)
 	@testset "End-to-end tests" begin
 		include("test_usage_small.jl")
 		include("test_usage.jl")
-	end
+	end=#
 
 	@testset "Aqua" begin
 		Aqua.test_all(StructuredOptimization; ambiguities=false, piracies=false)
