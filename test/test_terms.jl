@@ -39,15 +39,15 @@ cf = pi*norm(x,2)
 @test cf.lambda - pi == 0
 @test cf.f(~x) == norm(~x)
 
-cf = 3*norm(X,2,1)
+cf = 3*mixednorm(X,2,1)
 @test cf.lambda - 3 == 0
 @test cf.f(~X) == sum(  sqrt.(sum((~X).^2, dims=1 )) ) 
 
-cf = 4*norm(X,2,1,2)
+cf = 4*mixednorm(X,1,2)
 @test cf.lambda - 4 == 0
 @test cf.f(~X) == sum(  sqrt.(sum((~X).^2, dims=2 )) ) 
 
-@test_throws ErrorException 4*norm(X,1,2)
+@test_throws ErrorException 4*mixednorm(X,1,3)
 
 cf = norm(x, 2) <= 2.3
 @test cf.lambda == 1
@@ -175,7 +175,7 @@ end
 cf = 2*norm(x,1)
 ccf = conj(cf)
 @test ccf.A == cf.A
-@test ccf.f == Conjugate(Postcompose(NormL1(),2))
+@test ccf.f == Conjugate(Postcompose(NormL1(),2.0))
 @test_throws ErrorException conj(norm(randn(2,10)*x,1))
 
 cf = 2*norm(x,1)

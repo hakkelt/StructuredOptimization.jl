@@ -4,7 +4,7 @@ import Base: convert
 import AbstractOperators: displacement
 
 convert(::Type{Expression},x::Variable{T,N,A}) where {T,N,A} =
-Expression{1}((x,),Eye(T,size(x)))
+Expression((x,),Eye(T,size(x)))
 
 """
     variables(ex::Expression)

@@ -27,7 +27,7 @@ julia> affine(ex2)
 """
 function (*)(L::AbstractOperator, a::AbstractExpression)
   A = convert(Expression,a)
-  Expression{length(A.x)}(A.x,L*affine(A))
+  Expression(A.x,L*affine(A))
 end
 
 """
@@ -94,7 +94,7 @@ d.*a
 
 function (*)(coeff::T1, a::T) where {T1<:Number, T<:AbstractExpression}
   A = convert(Expression,a)
-  return Expression{length(A.x)}(A.x,coeff*affine(A))
+  return Expression(A.x,coeff*affine(A))
 end
 (*)(a::T, coeff::T1) where {T1<:Number, T<:AbstractExpression} = coeff*a
 ##Scale
@@ -132,7 +132,7 @@ function (*)(ex1::AbstractExpression, ex2::AbstractExpression)
   A = extract_affines(x, ex1)
   B = extract_affines(x, ex2)
   op = Ax_mul_Bx(A,B)
-  exp3 = Expression{length(x)}(x,op)
+  exp3 = Expression(x,op)
   return exp3
 end
 # Ax_mul_Bx
@@ -144,7 +144,7 @@ function (*)(ex1::AdjointExpression, ex2::AbstractExpression)
   A = extract_affines(x, ex1)
   B = extract_affines(x, ex2)
   op = Axt_mul_Bx(A,B)
-  exp3 = Expression{length(x)}(x,op)
+  exp3 = Expression(x,op)
   return exp3
 end
 # Axt_mul_Bx
@@ -156,7 +156,7 @@ function (*)(ex1::AbstractExpression, ex2::AdjointExpression)
   A = extract_affines(x, ex1)
   B = extract_affines(x, ex2)
   op = Ax_mul_Bxt(A,B)
-  exp3 = Expression{length(x)}(x,op)
+  exp3 = Expression(x,op)
   return exp3
 end
 # Ax_mul_Bxt
@@ -168,7 +168,7 @@ function Broadcast.broadcasted(::typeof(*), ex1::AbstractExpression, ex2::Abstra
   A = extract_affines(x, ex1)
   B = extract_affines(x, ex2)
   op = HadamardProd(A,B)
-  exp3 = Expression{length(x)}(x,op)
+  exp3 = Expression(x,op)
   return exp3
 end
 # Hadamard

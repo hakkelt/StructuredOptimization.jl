@@ -1,7 +1,7 @@
 struct Expression{N,A<:AbstractOperator} <: AbstractExpression
   x::NTuple{N,Variable}
   L::A
-  function Expression{N}(x::NTuple{N,Variable}, L::A) where {N,A<:AbstractOperator}
+  function Expression(x::NTuple{N,Variable}, L::A) where {N,A<:AbstractOperator}
     # checks on L
     ndoms(L,1) > 1 && throw(ArgumentError(
       "Cannot create expression with LinearOperator with `ndoms(L,1) > 1`"
@@ -27,12 +27,21 @@ struct AdjointExpression{E <: AbstractExpression} <: AbstractExpression
   ex::E
 end
 
-import Base: adjoint
+import Base: adjoint, show
 
 adjoint(ex::AbstractExpression) = AdjointExpression(convert(Expression,ex))
 adjoint(ex::AdjointExpression) = ex.ex
 
+function show(io::IO, ex::Expression)
+  if length(ex.x) == 1
+    print(io, AbstractOperators.fun_name(ex.L), " * ", ex.x[1])
+  else
+    print(io, AbstractOperators.fun_name(ex.L), " * (", join(ex.x, ", "), ")")
+  end
+end
+
 include("utils.jl")
 include("multiplication.jl")
 include("addition.jl")
+include("addition_tricky_part.jl")
 include("abstractOperator_bind.jl")

@@ -1,7 +1,7 @@
 # Norms
 
 import LinearAlgebra: norm
-export norm
+export norm, mixednorm
 
 """
     norm(x::AbstractExpression, p=2, [q,] [dim=1])
@@ -48,31 +48,75 @@ function norm(ex::AbstractExpression, ::typeof(*))
 end
 
 # Mixed Norm
-function norm(ex::AbstractExpression, p1::Int, p2::Int, dim::Int = 1 )
-    if p1 == 2 && p2 == 1
-        f = NormL21(1.0,dim)
+"""
+    mixednorm(x, p::Int, q::Int)
+
+``l_{2,1}`` mixed norm (aka Sum-of-``l_2``-norms)
+```math
+f(\\mathbf{X}) = \\sum_i \\| \\mathbf{x}_i \\|
+```
+where ``\\mathbf{x}_i`` is the ``i``-th column if `p == 2` and `q == 1` (or row if  `p == 1` and `q == 2`) of ``\\mathbf{X}``.
+"""
+function mixednorm(ex::AbstractExpression, p::Int, q::Int)
+    if p == 2 && q == 1
+        f = NormL21(1.0, 1)
+    elseif p == 1 && q == 2
+        f = NormL21(1.0, 2)
     else
         error("function not implemented")
     end
     return Term(f, ex)
 end
+function mixednorm(A::AbstractMatrix{T}, p::Int, q::Int) where {T}
+    if p == 2 && q == 1
+        return NormL21(1.0, 1)(A)
+    elseif p == 1 && q == 2
+        return NormL21(1.0, 2)(A)
+    else
+        error("function not implemented")
+    end
+    return result
+end
 
 # Least square terms
 
-export ls
+export ls, normalop_ls
 
 """
     ls(x::AbstractExpression)
 
 Returns the squared norm (least squares) of `x`:
-
 ```math
 f (\\mathbf{x}) = \\frac{1}{2} \\| \\mathbf{x} \\|^2
 ```
-
 (shorthand of `1/2*norm(x)^2`).
 """
 ls(ex) = Term(SqrNormL2(), ex)
+
+"""
+    normalop_ls(x::AbstractExpression)
+
+Returns the squared norm (least squares) of `L*x`:
+```math
+f (\\mathbf{L} * \\mathbf{x}) = \\frac{1}{2} \\| \\mathbf{L} * \\mathbf{x} \\|^2
+```
+(shorthand of `1/2*norm(x)^2`).
+
+The only difference with `ls` comes when gradient! is called. In this case, the
+gradient is computed as usual, but the squared norm of the gradient (i.e. the
+squared norm of `Lᴴ * L * x`) is returned instead of the squared norm of `L * x`.
+This is much faster to compute, if `Lᴴ * L` has a fast implementation.
+"""
+
+normalop_ls(::Variable) = error("normalop_ls does not work with Variables alone. Use ls instead.")
+function normalop_ls(ex::Expression)
+    eye_op = if length(ex.x) == 1
+        Eye(domainType(ex.L), size(ex.L, 2))
+    else
+        HCAT([Eye(domainType(L), size(L, 2)) for L in ex.L]...)
+    end
+    return Term(SqrNormL2WithNormalOp(ex.L), Expression(ex.x, eye_op))
+end
 
 import Base: ^
 
@@ -138,13 +182,12 @@ Term(CrossEntropy(b), ex)
 export logisticloss
 
 """
-    logbarrier(x::AbstractExpression, y::AbstractArray)
+    logisticloss(x::AbstractExpression, y::Array)
 
 Applies the logistic loss function:
 ```math
-f(\\mathbf{x}) = \\sum_{i} \\log(1+ \\exp(-y_i x_i)),
+f(\\mathbf{x}) = \\sum_i \\log(1 + \\exp(-y_i x_i)).
 ```
-where `y` is an array containing ``y_i``.
 """
 logisticloss(ex::AbstractExpression, y::AbstractArray) =
 Term(LogisticLoss(y, 1.0), ex)

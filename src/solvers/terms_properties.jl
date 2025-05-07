@@ -1,25 +1,45 @@
 is_proximable(term::Term) = is_AAc_diagonal(term)
 
-function is_proximable(terms::Tuple)
-	# Check that each term is proximable
-	if any(is_proximable.(terms) .== false)
-		return false
-	end
+function get_operators_for_var(term, var)
+    full_operator = affine(term)
+    if AbstractOperators.ndoms(full_operator, 2) == 1
+        return full_operator
+    else
+        return full_operator[findfirst(==(var), variables(term))]
+    end
+end
+
+function is_separable_sum(terms::NTuple{N,Term}) where {N}
 	# Construct the set of occurring variables
 	vars = Set()
 	for term in terms
 		union!(vars, variables(term))
 	end
 	# Check that each variable occurs in only one term
-	for v in vars
-		tv = [t for t in terms if v in variables(t)]
-		if length(tv) != 1
-            if all( is_sliced.(tv) ) && all( is_proximable.(tv) )
-				return true
-			else
+	for var in vars
+		terms_with_var = [t for t in terms if var in variables(t)]
+		if length(terms_with_var) != 1
+			# All terms must be either  or have a single variable
+			if ! all( length(variables(term)) == 1 || is_separable(term.f) for term in terms_with_var )
 				return false
 			end
+            # All terms must be sliced for this variable
+            operators = [get_operators_for_var(term, var) for term in terms_with_var]
+			if any(!OperatorCore.is_sliced(op) for op in operators)
+				return false
+			end
+			# The sliced operators must not overlap
+            slicing_masks = [OperatorCore.is_sliced(op) ? OperatorCore.get_slicing_mask(op) : nothing for op in operators]
+            for i in eachindex(operators), j in i+1:length(operators)
+				if any(slicing_masks[i] .&& slicing_masks[j])
+					return false
+				end
+            end
 		end
 	end
 	return true
+end
+
+function is_proximable(terms::NTuple{N,Term}) where {N}
+	return all(is_proximable.(terms)) && is_separable_sum(terms)
 end
