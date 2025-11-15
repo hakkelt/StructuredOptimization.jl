@@ -39,15 +39,15 @@ cf = pi*norm(x,2)
 @test cf.lambda - pi == 0
 @test cf.f(~x) == norm(~x)
 
-cf = 3*mixednorm(X,2,1)
+cf = 3*norm(X,2,1)
 @test cf.lambda - 3 == 0
 @test cf.f(~X) == sum(  sqrt.(sum((~X).^2, dims=1 )) ) 
 
-cf = 4*mixednorm(X,1,2)
+cf = 4*norm(X,2,1; dim=2)
 @test cf.lambda - 4 == 0
 @test cf.f(~X) == sum(  sqrt.(sum((~X).^2, dims=2 )) ) 
 
-@test_throws ErrorException 4*mixednorm(X,1,3)
+@test_throws ErrorException 4*norm(X,1,2)
 
 cf = norm(x, 2) <= 2.3
 @test cf.lambda == 1
@@ -192,21 +192,6 @@ cf = ls(x) + 10*norm(x, 1)
 @test cf[2].lambda == 10
 @test cf[2].f(~x) == norm(~x,1)
 
-x = Variable(10)
-cf = () #empty cost function 
-cf += 10*norm(x, 1)
-@test length(cf) == 1
-@test cf[1].lambda == 10
-@test cf[1].f(~x) == 10*norm(~x,1)
-
-x = Variable(10)
-cf = () #empty cost function 
-cf += ls(x) + 10*norm(x, 1)
-@test cf[1].lambda == 1
-@test cf[1].f(~x) == 0.5*norm(~x)^2
-@test cf[2].lambda == 10
-@test cf[2].f(~x) == norm(~x,1)
-
 # More complex situations
 
 x = Variable(10)
@@ -261,5 +246,7 @@ cf = norm(w + z)^2
 @test StructuredOptimization.is_AcA_diagonal(cf) == false
 
 cf = norm(x, 1) + norm(y, 2)
-@test StructuredOptimization.is_smooth.(cf) == (false,false)
-@test StructuredOptimization.is_AcA_diagonal.(cf) == (true,true)
+@test StructuredOptimization.is_smooth.(cf.terms) == (false,false)
+@test StructuredOptimization.is_smooth(cf) == false
+@test StructuredOptimization.is_AcA_diagonal.(cf.terms) == (true,true)
+@test StructuredOptimization.is_AcA_diagonal(cf) == true

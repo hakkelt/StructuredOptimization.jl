@@ -71,21 +71,21 @@ julia> randn(10,5).*X
 """
 function (*)(m::T, a::Union{AbstractVector,AbstractMatrix}) where {T<:AbstractExpression}
   M = convert(Expression,m)
-  op = LMatrixOp(codomainType(affine(M)),size(affine(M),1),a)
+  op = LMatrixOp(codomain_type(affine(M)),size(affine(M),1),a)
   return op*M
 end
 #LMatrixOp
 
 function (*)(M::AbstractMatrix, a::T) where {T<:AbstractExpression}
   A = convert(Expression,a)
-  op = MatrixOp(codomainType(affine(A)),size(affine(A),1),M)
+  op = MatrixOp(codomain_type(affine(A)),size(affine(A),1),M)
   return op*A
 end
 #MatrixOp
 
 function Broadcast.broadcasted(::typeof(*), d::D, a::T) where {D <: Union{Number,AbstractArray}, T<:AbstractExpression}
   A = convert(Expression,a)
-  op = DiagOp(codomainType(affine(A)),size(affine(A),1),d)
+  op = DiagOp(codomain_type(affine(A)),size(affine(A),1),d)
   return op*A
 end
 Broadcast.broadcasted(::typeof(*), a::T, d::D) where {D <: Union{Number,AbstractArray}, T<:AbstractExpression} =

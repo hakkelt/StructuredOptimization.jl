@@ -1,40 +1,41 @@
 # returns all variables of a cost function, in terms of appearance
 extract_variables(t::TermOrExpr) = variables(t) 
 
-function extract_variables(t::NTuple{N,TermOrExpr}) where {N}
+function extract_variables(t::Union{Tuple, TermSet})
   var_tuples = variables.(t)
-  vars = vcat(collect.(var_tuples)...)
+  vars = collect(Base.Iterators.flatten(var_tuples))
   return tuple(unique(vars)...)
 end
 
 # extract functions from terms
 function extract_functions(t::Term)
-  f = displacement(t) == 0 ? t.f : PrecomposeDiagonal(t.f, one(t.lambda), displacement(t)) #for now I keep this
+  disp = displacement(t)
+  f = disp == 0 ? t.f : PrecomposeDiagonal(t.f, one(t.lambda), disp) #for now I keep this
   f = t.lambda == 1 ? f : Postcompose(f, t.lambda)                                  #for now I keep this
   #TODO change this
   return f
 end
-extract_functions(t::NTuple{N,Term}) where {N} = SeparableSum(extract_functions.(t))
-extract_functions(t::Tuple{Term}) = extract_functions(t[1])
+extract_functions(t::TermSet) = SeparableSum(extract_functions.(t))
 
 # extract functions from terms without displacement
 function extract_functions_nodisp(t::Term)
   f = t.lambda == 1 ? t.f : Postcompose(t.f, t.lambda)
   return f
 end
-extract_functions_nodisp(t::NTuple{N,Term}) where {N} = SeparableSum(extract_functions_nodisp.(t))
-extract_functions_nodisp(t::Tuple{Term}) = extract_functions_nodisp(t[1])
+extract_functions_nodisp(t::TermSet) = SeparableSum(extract_functions_nodisp.(t))
 
 # extract operators from terms
 
 # returns all operators with an order dictated by xAll
 
 #single term, single variable
-extract_operators(xAll::Tuple{Variable}, t::TermOrExpr)  = operator(t)
-extract_operators(xAll::NTuple{N,Variable}, t::TermOrExpr) where {N} = extract_operators(xAll, (t,))
+extract_operators(::Tuple{Variable}, t::AbstractExpression)  = operator(t)
+extract_operators(::Tuple{Variable}, t::Term)  = operator(t)
+extract_operators(xAll::NTuple{N,Variable}, t::AbstractExpression) where {N} = extract_operators(xAll, (t,))
+extract_operators(xAll::NTuple{N,Variable}, t::Term) where {N} = extract_operators(xAll, TermSet(t,))
 
 #multiple terms, multiple variables
-function extract_operators(xAll::NTuple{N,Variable}, t::NTuple{M,TermOrExpr}) where {N,M}
+function extract_operators(xAll::NTuple{N,Variable}, t::TermSet) where {N}
   ops = ()
   for ti in t
     tex = expand(xAll,ti)
@@ -59,11 +60,13 @@ end
 # returns all affines with an order dictated by xAll
 
 #single term, single variable
-extract_affines(::Tuple{Variable}, t::TermOrExpr)  = affine(t)
-extract_affines(xAll::NTuple{N,Variable}, t::TermOrExpr) where {N} = extract_affines(xAll, (t,))
+extract_affines(::Tuple{Variable}, t::AbstractExpression)  = affine(t)
+extract_affines(::Tuple{Variable}, t::Term)  = affine(t)
+extract_affines(xAll::NTuple{N,Variable}, t::AbstractExpression) where {N} = extract_affines(xAll, (t,))
+extract_affines(xAll::NTuple{N,Variable}, t::Term) where {N} = extract_affines(xAll, TermSet(t,))
 
 #multiple terms, multiple variables
-function extract_affines(xAll::NTuple{N,Variable}, t::NTuple{M,TermOrExpr}) where {N,M}
+function extract_affines(xAll::NTuple{N,Variable}, t::TermSet) where {N}
   ops = ()
   for ti in t
     tex = expand(xAll,ti)
@@ -86,7 +89,7 @@ end
 # expand term domain dimensions
 function expand(xAll::NTuple{N,Variable}, t::Term) where {N}
   xt   = variables(t)
-  C    = codomainType(operator(t))
+  C    = codomain_type(operator(t))
   size_out = size(operator(t),1)
   ex = t.A
 
@@ -101,7 +104,7 @@ end
 function expand(xAll::NTuple{N,Variable}, ex::AbstractExpression) where {N}
   ex = convert(Expression,ex)
   xt   = variables(ex)
-  C    = codomainType(operator(ex))
+  C    = codomain_type(operator(ex))
   size_out = size(operator(ex),1)
 
   for x in xAll

@@ -1,34 +1,36 @@
 import Base: convert, size, eltype, ~
-export Variable
+export Variable, get_name
 
 struct Variable{T, N, A <: AbstractArray{T,N}} <: AbstractExpression
 	x::A
+  name::String
+  function Variable(x::AbstractArray{T,N}; name::String="x") where {T,N}
+    A = typeof(x)
+    new{T,N,A}(x, name)
+  end
 end
 
 # constructors
 """
-	Variable([T::Type,] dims...)
+	Variable([T::Type,] dims...; name::String="x")
+  Variable(x::AbstractArray; name::String="x")
 
-Returns a `Variable` of dimension `dims` initialized with an array of all zeros.
-
-`Variable(x::AbstractArray)`
-
-Returns a `Variable` of dimension `size(x)` initialized with `x`
+Creates an optimization variable of type `T` and dimensions `dims...`, or from the provided array `x`.
+The optional `name` argument allows to specify a name for the variable, which is useful for display purposes.
 
 """
-function Variable(T::Type, args::Int...)
-  N = length(args)
-  Variable{T,N,Array{T,N}}(zeros(T, args...))
+function Variable(T::Type, args::Int...; name::String="x")
+  Variable(zeros(T, args...); name)
 end
 
-function Variable(args::Int...)
-  Variable(zeros(args...))
+function Variable(args::Int...; name::String="x")
+  Variable(zeros(args...); name)
 end
 
 # Utils
 
 function Base.show(io::IO, x::Variable)
-  print(io, "Variable($(eltype(x.x)), $(size(x.x)))")
+  print(io, "Variable($(eltype(x.x)), $(size(x.x)), \"$(x.name)\")")
 end
 
 """
@@ -54,3 +56,10 @@ eltype(x::Variable)
 Like `eltype(x::AbstractArray)` returns the type of the elements of `x`.
 """
 eltype(x::Variable) = eltype(x.x)
+
+"""
+get_name(x::Variable)
+
+Returns the name of the variable `x`. If no name was provided at construction, returns `"x"`.
+"""
+get_name(x::Variable) = x.name

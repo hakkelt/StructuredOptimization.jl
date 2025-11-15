@@ -174,7 +174,7 @@ julia> b = randn(10);
 julia> size(b), eltype(b)
 ((10,), Float64)
 
-julia> size(affine(ex),1), codomainType(affine(ex))
+julia> size(affine(ex),1), codomain_type(affine(ex))
 ((10,), Float64)
 
 julia> ex + b

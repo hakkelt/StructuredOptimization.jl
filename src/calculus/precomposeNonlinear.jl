@@ -15,9 +15,9 @@ struct PrecomposeNonlinear{P,
 end
 
 function PrecomposeNonlinear(g::P, G::T) where {P, T}
-  t, s = domainType(G), size(G,2)
+  t, s = domain_type(G), size(G,2)
   bufD = eltype(s) <: Int ? zeros(t,s) : ArrayPartition(zeros.(t,s))
-  t, s = codomainType(G), size(G,1)
+  t, s = codomain_type(G), size(G,1)
   bufC = eltype(s) <: Int ? zeros(t,s) : ArrayPartition(zeros.(t,s))
   bufC2 = eltype(s) <: Int ? zeros(t,s) : ArrayPartition(zeros.(t,s))
   PrecomposeNonlinear{P, T, typeof(bufD), typeof(bufC)}(g, G, bufD, bufC, bufC2)

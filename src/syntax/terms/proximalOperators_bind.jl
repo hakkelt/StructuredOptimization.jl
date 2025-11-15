@@ -1,10 +1,10 @@
 # Norms
 
 import LinearAlgebra: norm
-export norm, mixednorm
+export norm
 
 """
-    norm(x::AbstractExpression, p=2, [q,] [dim=1])
+    norm(x::AbstractExpression, p=2, [q]; [dim=1])
 
 Returns the norm of `x`.
 
@@ -48,34 +48,13 @@ function norm(ex::AbstractExpression, ::typeof(*))
 end
 
 # Mixed Norm
-"""
-    mixednorm(x, p::Int, q::Int)
-
-``l_{2,1}`` mixed norm (aka Sum-of-``l_2``-norms)
-```math
-f(\\mathbf{X}) = \\sum_i \\| \\mathbf{x}_i \\|
-```
-where ``\\mathbf{x}_i`` is the ``i``-th column if `p == 2` and `q == 1` (or row if  `p == 1` and `q == 2`) of ``\\mathbf{X}``.
-"""
-function mixednorm(ex::AbstractExpression, p::Int, q::Int)
-    if p == 2 && q == 1
-        f = NormL21(1.0, 1)
-    elseif p == 1 && q == 2
-        f = NormL21(1.0, 2)
+function norm(ex::AbstractExpression, p1::Int, p2::Int; dim::Int = 1)
+    if p1 == 2 && p2 == 1
+        f = NormL21(1.0, dim)
     else
         error("function not implemented")
     end
     return Term(f, ex)
-end
-function mixednorm(A::AbstractMatrix{T}, p::Int, q::Int) where {T}
-    if p == 2 && q == 1
-        return NormL21(1.0, 1)(A)
-    elseif p == 1 && q == 2
-        return NormL21(1.0, 2)(A)
-    else
-        error("function not implemented")
-    end
-    return result
 end
 
 # Least square terms
@@ -111,9 +90,9 @@ This is much faster to compute, if `Lᴴ * L` has a fast implementation.
 normalop_ls(::Variable) = error("normalop_ls does not work with Variables alone. Use ls instead.")
 function normalop_ls(ex::Expression)
     eye_op = if length(ex.x) == 1
-        Eye(domainType(ex.L), size(ex.L, 2))
+        Eye(domain_type(ex.L), size(ex.L, 2))
     else
-        HCAT([Eye(domainType(L), size(L, 2)) for L in ex.L]...)
+        HCAT([Eye(domain_type(L), size(L, 2)) for L in ex.L]...)
     end
     return Term(SqrNormL2WithNormalOp(ex.L), Expression(ex.x, eye_op))
 end

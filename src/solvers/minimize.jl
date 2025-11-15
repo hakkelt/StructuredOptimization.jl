@@ -1,4 +1,4 @@
-export problem, @minimize
+export problem, @minimize, @term
 
 """
 	problems(terms...)
@@ -19,21 +19,40 @@ julia> p = problem(ls(A*x-b), norm(x) <= 1)
 ```
 
 """
-function problem(terms::Vararg)
-	cf = ()
-	for i = 1:length(terms)
-		cf = (cf...,terms[i]...)
-	end
-	return cf
+problem(terms...) = begin
+    flattened_terms = Term[]
+    for t in terms
+        if t isa TermSet
+            append!(flattened_terms, t.terms)
+        elseif t isa Term
+            push!(flattened_terms, t)
+        else
+            error("All arguments must be of type Term or TermSet")
+        end
+    end
+    TermSet(flattened_terms...)
 end
 
 function expand_terms_with_repr(expr)
     if expr isa Expr && expr.head == :call && expr.args[1] == :+
-        terms = map(t -> :(Term($(esc(t)), $(string(t)))), expr.args[2:end])
-        return :(tuple($(terms...)))
+        return Tuple(map(t -> :(Term($(esc(t)), $(string(t)))), expr.args[2:end]))
+    elseif expr isa Symbol
+        return (esc(expr),)
+    elseif expr isa Expr && expr.head == :tuple
+        return Tuple(first.(expand_terms_with_repr.(expr.args)))
     else
-        return :(Term($(esc(expr)), $(string(expr))))
+        return (:(Term($(esc(expr)), $(string(expr)))),)
     end
+end
+
+"""
+    @term expr
+
+Records the code representation of the term. Useful if later we want to print the term, e.g. when debugging.
+"""
+macro term(expr)
+    terms = expand_terms_with_repr(expr)
+    return Expr(:block, terms...)
 end
 
 """
@@ -66,17 +85,21 @@ of iterations spent by the solver algorithm.
 """
 macro minimize(cf::Union{Expr, Symbol})
     cost = expand_terms_with_repr(cf)
-    return :(solve(problem($cost)))
+    problem_expr = Expr(:call, :problem, cost...)
+    return :(solve($problem_expr))
 end
 
 macro minimize(cf::Union{Expr, Symbol}, s::Symbol, cstr::Union{Expr, Symbol})
     cost = expand_terms_with_repr(cf)
     if s == :st
         constraints = expand_terms_with_repr(cstr)
-        return :(solve(problem($cost, $constraints)))
+        terms = (cost..., constraints...)
+        problem_expr = Expr(:call, :problem, terms...)
+        return :(solve($problem_expr))
     elseif s == :with
         solver = esc(cstr)
-        return :(solve(problem($cost), $solver))
+        problem_expr = Expr(:call, :problem, cost...)
+        return :(solve($problem_expr, $solver))
     else
         error("wrong symbol after cost function! use `st` or `with`")
     end
@@ -88,5 +111,7 @@ macro minimize(cf::Union{Expr, Symbol}, s::Symbol, cstr::Union{Expr, Symbol}, w:
     constraints = expand_terms_with_repr(cstr)
     w != :with && error("wrong symbol after constraints! use `with`")
     solver = esc(slv)
-    return :(solve(problem($cost, $constraints), $solver))
+    terms = (cost..., constraints...)
+    problem_expr = Expr(:call, :problem, terms...)
+    return :(solve($problem_expr, $solver))
 end

@@ -157,7 +157,7 @@ function add_missing_vars(old_vars, op, vars)
     if isempty(missing_vars)
         return old_vars, op
     end
-    dummy_ops = [AbstractOperators.Zeros(eltype(~var), size(~var), AbstractOperators.codomainType(op), size(op, 1)) for var in missing_vars]
+    dummy_ops = [AbstractOperators.Zeros(eltype(~var), size(~var), AbstractOperators.codomain_type(op), size(op, 1)) for var in missing_vars]
     new_vars = (old_vars..., missing_vars...)
     new_op = AbstractOperators.HCAT(op, dummy_ops...)
     return new_vars, new_op
@@ -187,45 +187,3 @@ function Usum_op(
     opNew = sign ? A+B : A-B
 	return xNew, opNew
 end
-
-#=
-function _replace_in(obj, tasks)
-    for task in tasks
-        if obj === task.first
-            return task.second, filter(t -> t !== task, tasks)
-        end
-    end
-    return obj, tasks
-end
-function _replace_in(obj::Tuple, tasks)
-    new_tuple = []
-    for o in obj
-        new_obj, tasks = _replace_in(o, tasks)
-        push!(new_tuple, new_obj)
-    end
-    return tuple(new_tuple...), tasks
-end
-function _replace_in(obj::AbstractOperators.AbstractOperator, tasks)
-    fields = [getfield(obj, name) for name in fieldnames(typeof(obj))]
-    new_fields = [_replace_in(field, searched_obj, new_obj) for field in fields]
-    maybe_new_obj = any(new_fields .!== fields) ? typeof(obj).name.wrapper(new_fields...) : obj
-    return maybe_new_obj, tasks
-end
-function permute_single_operator(op::AbstractOperators.HCAT, perm::Vector{Int})
-    @show op
-    @show perm
-    return AbstractOperators.HCAT([op[i] for i in perm]...)
-end
-function permute_operator(op::AbstractOperators.AbstractOperator, permutations)
-    @show permutations
-    tasks = [(old_op => permute_single_operator(old_op, perm)) for (old_op, perm) in reverse(permutations)]
-    #=for (old_op, perm) in reverse(permutations)
-        new_op = permute_single_operator(old_op, perm)
-        @show op
-        @show old_op
-        @show new_op
-        op = _replace_in(op, old_op, new_op)
-    end=#
-    return _replace_in(op, tasks)
-    #return op
-end=#
