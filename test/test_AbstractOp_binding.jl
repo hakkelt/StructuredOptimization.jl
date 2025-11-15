@@ -52,15 +52,15 @@ ex = x[1:2]
 
 # DFT
 n = 5
-op = AbstractOperators.DFT(Float64,(n,))
+op = DFT(Float64,(n,))
 x = Variable(randn(n))
 ex = fft(x)
 @test norm(operator(ex)*(~x)-op*(~x)) <1e-12
 
 # IDFT
 n = 5
-op = IDFT(Float64,(n,))
-x = Variable(randn(n))
+op = IDFT(ComplexF64,(n,))
+x = Variable(randn(ComplexF64, n))
 ex = ifft(x)
 @test norm(operator(ex)*(~x)-op*(~x)) <1e-12
 

@@ -13,11 +13,11 @@ struct Expression{N,A<:AbstractOperator} <: AbstractExpression
     check_sz && throw(ArgumentError(
       "Size of the operator domain $(size(L, 2)) must match size of the variable $(size.(x))"
      ))
-    dmL = domainType(L)
+    dmL = domain_type(L)
     dmx = eltype.(x)
     check_dm = length(dmx) == 1 ? dmx[1] != dmL : dmx != dmL
     check_dm && throw(ArgumentError(
-      "Type of the operator domain $(domainType(L)) must match type of the variable $(eltype.(x))"
+      "Type of the operator domain $(domain_type(L)) must match type of the variable $(eltype.(x))"
      ))
     new{N,A}(x,L)
   end

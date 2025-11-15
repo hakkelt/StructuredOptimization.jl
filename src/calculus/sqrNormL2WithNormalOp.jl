@@ -26,9 +26,9 @@ squared norm of `L * x`, but rather the squared norm of `Lᴴ * L * x` (i.e. the
 squared norm of the gradient). Most algorithms, however, tolerate this
 difference, and it is much faster to compute.
 """
-struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator}
+struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator,L2<:AbstractOperator}
     A::L
-    AᴴA::L
+    AᴴA::L2
     lambda::T
     function SqrNormL2WithNormalOp(A, lambda)
         @assert A isa AbstractOperator
@@ -36,8 +36,8 @@ struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator}
         if any(lambda .< 0)
             error("coefficients in λ must be nonnegative")
         else
-            AᴴA = AbstractOperators.get_normal_op(A)
-            new{typeof(lambda),all(lambda .> 0),typeof(A)}(A, AᴴA, lambda)
+            AᴴA = A' * A
+            new{typeof(lambda),all(lambda .> 0),typeof(A),typeof(AᴴA)}(A, AᴴA, lambda)
         end
     end
 end

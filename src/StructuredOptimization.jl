@@ -3,16 +3,21 @@ module StructuredOptimization
 using LinearAlgebra
 using RecursiveArrayTools
 using ProximalCore
-using AbstractOperators
+using AbstractOperators, DSPOperators, FFTWOperators
 using ProximalOperators
 using ProximalAlgorithms
 using Combinatorics: permutations, powerset
-using OperatorCore
+using ProximalAlgorithms: IterativeAlgorithm, override_parameters
 
 ProximalAlgorithms.value_and_gradient(f, x) = begin
   y, fy = gradient(f, x)
   return fy, y
 end
+ProximalAlgorithms.value_and_gradient!(grad_f_x, f, x) = begin
+  fy = gradient!(grad_f_x, f, x)
+  return fy
+end
+
 abstract type AbstractExpression end
 
 include("syntax/variable.jl")

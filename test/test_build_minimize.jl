@@ -1,4 +1,4 @@
-using ProximalAlgorithms
+using ProximalAlgorithms: ZeroFPR, PANOC, PANOCplus
 
 x = Variable(10)
 A = randn(5, 10)
@@ -53,7 +53,7 @@ function test_solver(solver)
 	@test norm(~x - [a]) < 1e-4
 	@test norm(~y - [a^2]) < 1e-4
 end
-solvers = [ZeroFPR(; tol=1e-6), PANOC(; tol=1e-6)]
+solvers = [ZeroFPR(; tol=1e-6), PANOC(; tol=1e-6), PANOCplus(; tol=1e-6)]
 for solver in solvers
 	test_solver(solver)
 end

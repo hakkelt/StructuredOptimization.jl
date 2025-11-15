@@ -1,4 +1,4 @@
-is_proximable(term::Term) = is_AAc_diagonal(term)
+is_proximable(term::Term) = is_proximable(typeof(term.f)) && is_AAc_diagonal(term.A.L)
 
 function get_operators_for_var(term, var)
     full_operator = affine(term)
@@ -9,7 +9,7 @@ function get_operators_for_var(term, var)
     end
 end
 
-function is_separable_sum(terms::NTuple{N,Term}) where {N}
+function is_separable_sum(terms::TermSet)
 	# Construct the set of occurring variables
 	vars = Set()
 	for term in terms
@@ -25,11 +25,11 @@ function is_separable_sum(terms::NTuple{N,Term}) where {N}
 			end
             # All terms must be sliced for this variable
             operators = [get_operators_for_var(term, var) for term in terms_with_var]
-			if any(!OperatorCore.is_sliced(op) for op in operators)
+			if any(is_sliced(op) for op in operators)
 				return false
 			end
 			# The sliced operators must not overlap
-            slicing_masks = [OperatorCore.is_sliced(op) ? OperatorCore.get_slicing_mask(op) : nothing for op in operators]
+            slicing_masks = [is_sliced(op) ? get_slicing_mask(op) : nothing for op in operators]
             for i in eachindex(operators), j in i+1:length(operators)
 				if any(slicing_masks[i] .&& slicing_masks[j])
 					return false
@@ -40,6 +40,6 @@ function is_separable_sum(terms::NTuple{N,Term}) where {N}
 	return true
 end
 
-function is_proximable(terms::NTuple{N,Term}) where {N}
+function is_proximable(terms::TermSet)
 	return all(is_proximable.(terms)) && is_separable_sum(terms)
 end

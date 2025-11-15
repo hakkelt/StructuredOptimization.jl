@@ -33,7 +33,7 @@ imported = [
            ]
 
 importedFFTW = [
-                :fft      :(AbstractOperators.DFT);
+                :fft      :DFT;
                 :rfft     :RDFT;
                 :irfft    :IRDFT;
                 :ifft     :IDFT;
@@ -90,7 +90,7 @@ for i = 1:size(fun,1)
   @eval begin
     function $f(a::AbstractExpression, args...)
       A = convert(Expression,a)
-      op = $fAbsOp(codomainType(operator(A)),size(operator(A),1), args...)
+      op = $fAbsOp(codomain_type(operator(A)),size(operator(A),1), args...)
       return op*A
     end
   end

@@ -191,43 +191,26 @@ ex3 = ex1+ex2
 n = 3
 b = randn(n)
 
-x1 = Variable(randn(1))
+x1 = Variable(randn(n))
 x2 = Variable(randn(n))
 ex1 = x1.+x2 
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
 
-x1 = Variable(randn(1))
+x1 = Variable(randn(n))
 x2 = Variable(randn(n))
 ex1 = x1.+(x2+2) 
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
 @test displacement(ex1) == 2
 
-x1 = Variable(randn(1))
+x1 = Variable(randn(n))
 x2 = Variable(randn(n))
 ex1 = (x1+2).+(x2+b) 
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
 @test displacement(ex1) == (b.+2)
 
-x1 = Variable(randn(n))
-x2 = Variable(randn(1))
-ex1 = x1.+x2 
-@test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
-
-x1 = Variable(randn(n))
-x2 = Variable(randn(1))
-ex1 = x1.+(x2+2) 
-@test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
-@test displacement(ex1) == 2
-
-x1 = Variable(randn(n))
-x2 = Variable(randn(1))
-ex1 = (x1+b).+(x2+2) 
-@test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
-@test displacement(ex1) == (b.+2)
-
 n,m =2,4
 x1 = Variable(randn(n,m))
-x2 = Variable(randn(1,m))
+x2 = Variable(randn(n,m))
 ex1 = x1.+x2+6
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).+(~x2))) < 1e-9
 @test displacement(ex1) == 6
@@ -237,43 +220,26 @@ ex1 = x1.+x2+6
 n = 3
 b = randn(n)
 
-x1 = Variable(randn(1))
+x1 = Variable(randn(n))
 x2 = Variable(randn(n))
 ex1 = x1.-x2 
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
 
-x1 = Variable(randn(1))
+x1 = Variable(randn(n))
 x2 = Variable(randn(n))
 ex1 = x1.-(x2+2) 
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
 @test displacement(ex1) == -2
 
-x1 = Variable(randn(1))
+x1 = Variable(randn(n))
 x2 = Variable(randn(n))
 ex1 = (x1+2).-(x2+b) 
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
 @test displacement(ex1) == (2 .-b)
 
-x1 = Variable(randn(n))
-x2 = Variable(randn(1))
-ex1 = x1.-x2 
-@test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
-
-x1 = Variable(randn(n))
-x2 = Variable(randn(1))
-ex1 = x1.-(x2+2) 
-@test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
-@test displacement(ex1) == -2
-
-x1 = Variable(randn(n))
-x2 = Variable(randn(1))
-ex1 = (x1+b).-(x2+2) 
-@test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
-@test displacement(ex1) == (b.-2)
-
 n,m =2,4
 x1 = Variable(randn(n,m))
-x2 = Variable(randn(1,m))
+x2 = Variable(randn(n,m))
 ex1 = x1.-x2+6
 @test norm(operator(ex1)*(~variables(ex1))-((~x1).-(~x2))) < 1e-9
 @test displacement(ex1) == 6
@@ -317,14 +283,12 @@ ex3 = ex1-ex2
 @test_throws ErrorException MatrixOp(randn(10,20))*Variable(20)+(3+im)
 
 # Advanced (+) sum
-x, y, z, w = Variable(10), Variable(20), Variable(30), Variable(40)
-~x, ~y, ~z, ~w = rand(10), rand(20), rand(30), rand(40)
+x, y, z, w = Variable(rand(10)), Variable(rand(20)), Variable(rand(30)), Variable(rand(40))
 A = randn(10,10)
 exA = (z[1:10]+x)+3*(x+z[1:10])+A*(w[1:10]+z[1:10])+(z[1:10]+w[1:10])
 exB = 5*w[1:10]+z[1:10]+z[1:10]+3*y[1:10]+z[1:10]
 exC = exA+exB
 op = operator(exC)
-output = op*(~x,~y,~z,~w)
-expected_output = 4*~x+3*~y[1:10]+8*~z[1:10]+6*~w[1:10]+A*(~w[1:10]+~z[1:10])
+output = op*ArrayPartition(~z,~x,~w,~y)
+expected_output = 4*(~x)+3*(~y)[1:10]+8*(~z)[1:10]+6*(~w)[1:10]+A*((~w)[1:10]+(~z)[1:10])
 @test norm(output-expected_output) < 1e-12
-

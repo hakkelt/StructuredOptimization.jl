@@ -1,5 +1,5 @@
 using StructuredOptimization
-using AbstractOperators
+using AbstractOperators, DSPOperators, FFTWOperators
 using ProximalOperators
 using ProximalAlgorithms
 using RecursiveArrayTools
@@ -22,7 +22,7 @@ Random.seed!(0)
 		include("test_terms.jl")
 	end
 
-	#=@testset "Problem construction" begin
+	@testset "Problem construction" begin
 		include("test_problem.jl")
 		include("test_build_minimize.jl")
 	end
@@ -30,7 +30,7 @@ Random.seed!(0)
 	@testset "End-to-end tests" begin
 		include("test_usage_small.jl")
 		include("test_usage.jl")
-	end=#
+	end
 
 	@testset "Aqua" begin
 		Aqua.test_all(StructuredOptimization; ambiguities=false, piracies=false)
@@ -41,6 +41,7 @@ Random.seed!(0)
 			StructuredOptimization;
 			treat_as_own=[
 				ProximalAlgorithms.value_and_gradient,
+				ProximalAlgorithms.value_and_gradient!,
 				ProximalOperators.prox,
 				ProximalOperators.prox!,
 				ProximalOperators.gradient,

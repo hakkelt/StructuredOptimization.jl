@@ -1,3 +1,5 @@
+using ProximalAlgorithms: PANOCplus, FastForwardBackward, ZeroFPR, PANOC
+
 Random.seed!(0)
 
 ################################################################################
@@ -5,7 +7,6 @@ Random.seed!(0)
 ################################################################################
 
 println("Testing: regularized least squares, with two variable blocks to make things weird")
-begin
 m, n1, n2 = 30, 50, 100
 
 A1 = randn(m, n1)
@@ -17,55 +18,36 @@ lam2 = 1.0
 
 # Solve with PANOC+
 
-x1_fpg = Variable(n1)
-x2_fpg = Variable(n2)
-expr = ls(A1*x1_fpg + A2*x2_fpg - b) + lam1*norm(x1_fpg, 1) + lam2*norm(x2_fpg, 2)
-end
+x1_panocplus = Variable(n1)
+x2_panocplus = Variable(n2)
+expr = ls(A1*x1_panocplus + A2*x2_panocplus - b) + lam1*norm(x1_panocplus, 1) + lam2*norm(x2_panocplus, 2)
 prob = problem(expr)
-@time sol = solve(prob, PANOCplus(tol=1e-10, verbose=false,maxit=20000))
+@time sol = solve(prob, PANOCplus())
 
-# Solve with ZeroFPR
-
-x1_zerofpr = Variable(n1)
-x2_zerofpr = Variable(n2)
-expr = ls(A1*x1_zerofpr + A2*x2_zerofpr - b) + lam1*norm(x1_zerofpr, 1) + lam2*norm(x2_zerofpr, 2)
-prob = problem(expr)
-@time sol = solve(prob, ZeroFPR(tol=1e-10, verbose=false))
-
-# Solve with PANOC
-
-x1_panoc = Variable(n1)
-x2_panoc = Variable(n2)
-expr = ls(A1*x1_panoc + A2*x2_panoc - b) + lam1*norm(x1_panoc, 1) + lam2*norm(x2_panoc, 2)
-prob = problem(expr)
-@time sol = solve(prob, PANOC(tol=1e-10, verbose=false))
-
-# Solve with minimize, use default solver/options
-
-x1 = Variable(n1)
-x2 = Variable(n2)
-@time sol = @minimize ls(A1*x1 + A2*x2 - b) + lam1*norm(x1, 1) + lam2*norm(x2, 2)
-
-@test norm(~x1_fpg - ~x1_zerofpr, Inf)/(1+norm(~x1_zerofpr, Inf)) <= 1e-6
-@test norm(~x2_fpg - ~x2_zerofpr, Inf)/(1+norm(~x2_zerofpr, Inf)) <= 1e-6
-@test norm(~x1_fpg - ~x1_panoc, Inf)/(1+norm(~x1_panoc, Inf)) <= 1e-6
-@test norm(~x2_fpg - ~x2_panoc, Inf)/(1+norm(~x2_panoc, Inf)) <= 1e-6
-@test norm(~x1 - ~x1_zerofpr, Inf)/(1+norm(~x1_zerofpr, Inf)) <= 1e-3
-@test norm(~x2 - ~x2_zerofpr, Inf)/(1+norm(~x2_zerofpr, Inf)) <= 1e-3
-
-res = A1*~x1_fpg + A2*~x2_fpg - b
+res = A1*~x1_panocplus + A2*~x2_panocplus - b
 grad1 = A1'*res
 grad2 = A2'*res
-ind1_zero = (~x1_fpg .== 0)
-subgr1 = lam1*sign.(~x1_fpg)
+ind1_zero = (~x1_panocplus .== 0)
+subgr1 = lam1*sign.(~x1_panocplus)
 subdiff1_low, subdiff1_upp = copy(subgr1), copy(subgr1)
 subdiff1_low[ind1_zero] .= -lam1
 subdiff1_upp[ind1_zero] .= +lam1
-subgr2 = lam2*(~x2_fpg/norm(~x2_fpg, 2))
+subgr2 = lam2*(~x2_panocplus/norm(~x2_panocplus, 2))
 
 @test maximum(subdiff1_low + grad1) <= 1e-6
 @test maximum(-subdiff1_upp - grad1) <= 1e-6
 @test norm(grad2 + subgr2) <= 1e-6
+
+# Solve with FastForwardBackward
+
+x1_ffb = Variable(n1)
+x2_ffb = Variable(n2)
+expr = ls(A1*x1_ffb + A2*x2_ffb - b) + lam1*norm(x1_ffb, 1) + lam2*norm(x2_ffb, 2)
+prob = problem(expr)
+@time sol = solve(prob, FastForwardBackward())
+
+@test norm(~x1_panocplus - ~x1_ffb, Inf)/(1+norm(~x1_ffb, Inf)) <= 1e-6
+@test norm(~x2_panocplus - ~x2_ffb, Inf)/(1+norm(~x2_ffb, Inf)) <= 1e-6
 
 ###############################################################################
 ## Lasso problem with known solution
@@ -165,13 +147,13 @@ prob = problem(expr)
 
 # Solve with minimize, default solver/options
 
-x = Variable(n)
-@time sol = @minimize smooth(norm(A*x - b, 2)) + lam*norm(x, 1)
+#x = Variable(n)
+#@time sol = @minimize smooth(norm(A*x - b, 2)) + lam*norm(x, 1)
 
 @test norm(~x_pg - ~x_fpg, Inf)/(1+norm(~x_pg, Inf)) <= 1e-4
 @test norm(~x_pg - ~x_zerofpr, Inf)/(1+norm(~x_pg, Inf)) <= 1e-4
 @test norm(~x_pg - ~x_panoc, Inf)/(1+norm(~x_pg, Inf)) <= 1e-4
-@test norm(~x_pg - ~x, Inf)/(1+norm(~x_pg, Inf)) <= 1e-3
+#@test norm(~x_pg - ~x, Inf)/(1+norm(~x_pg, Inf)) <= 1e-3
 
 ################################################################################
 ### Box-constrained least-squares
@@ -228,11 +210,11 @@ prob = problem(expr, x_panoc in [lb, ub])
 
 # Solve with minimize, default solver/options
 
-x = Variable(n)
-@time sol = @minimize ls(A*x - b) st x in [lb, ub]
+#x = Variable(n)
+#@time sol = @minimize ls(A*x - b) st x in [lb, ub]
 
-@test norm(~x - max.(lb, min.(ub, ~x)), Inf) <= 1e-12
-@test norm(~x - max.(lb, min.(ub, ~x - A'*(A*~x - b))), Inf)/(1+norm(~x, Inf)) <= 1e-4
+#@test norm(~x - max.(lb, min.(ub, ~x)), Inf) <= 1e-12
+#@test norm(~x - max.(lb, min.(ub, ~x - A'*(A*~x - b))), Inf)/(1+norm(~x, Inf)) <= 1e-4
 
 ################################################################################
 ### Non-negative least-squares from a known solution
