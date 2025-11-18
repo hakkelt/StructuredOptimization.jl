@@ -3,6 +3,11 @@ struct Term{T1<:Real,T2,T3<:AbstractExpression}
 	f::T2
 	A::T3
 	repr::Union{String,Nothing}
+	function Term(lambda::T1, f::T2, A::T3, repr::Union{String,Nothing}) where {T1<:Real,T2,T3<:AbstractExpression}
+		T1_ = real(codomain_type(affine(A)))
+		lambda = convert(T1_, lambda)
+		return new{T1_,T2,T3}(lambda, f, A, repr)
+	end
 end
 
 function Term(lambda, f, ex::AbstractExpression)
@@ -11,12 +16,12 @@ end
 
 function Term(f, ex::AbstractExpression)
 	A = convert(Expression, ex)
-	Term(one(real(codomain_type(affine(A)))), f, A)
+	Term(1, f, A)
 end
 
 function Term(f, ex::AbstractExpression, repr::String)
 	A = convert(Expression, ex)
-	Term(one(real(codomain_type(affine(A)))), f, A, repr)
+	Term(1, f, A, repr)
 end
 
 function Term(t::Term, repr::String)
