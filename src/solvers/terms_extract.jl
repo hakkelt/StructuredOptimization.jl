@@ -31,7 +31,7 @@ extract_functions_nodisp(t::TermSet) = SeparableSum(extract_functions_nodisp.(t)
 #single term, single variable
 extract_operators(::Tuple{Variable}, t::AbstractExpression)  = operator(t)
 extract_operators(::Tuple{Variable}, t::Term)  = operator(t)
-extract_operators(xAll::NTuple{N,Variable}, t::AbstractExpression) where {N} = extract_operators(xAll, (t,))
+extract_operators(xAll::NTuple{N,Variable}, t::AbstractExpression) where {N} = sort_and_extract_operators(xAll, expand(xAll, t))
 extract_operators(xAll::NTuple{N,Variable}, t::Term) where {N} = extract_operators(xAll, TermSet(t,))
 
 #multiple terms, multiple variables
@@ -62,7 +62,7 @@ end
 #single term, single variable
 extract_affines(::Tuple{Variable}, t::AbstractExpression)  = affine(t)
 extract_affines(::Tuple{Variable}, t::Term)  = affine(t)
-extract_affines(xAll::NTuple{N,Variable}, t::AbstractExpression) where {N} = extract_affines(xAll, (t,))
+extract_affines(xAll::NTuple{N,Variable}, t::AbstractExpression) where {N} = sort_and_extract_affines(xAll, expand(xAll, t))
 extract_affines(xAll::NTuple{N,Variable}, t::Term) where {N} = extract_affines(xAll, TermSet(t,))
 
 #multiple terms, multiple variables
