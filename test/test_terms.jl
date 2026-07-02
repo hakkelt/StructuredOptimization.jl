@@ -254,10 +254,10 @@ t_nls = normalop_ls(ex)
 @test t_nls.f isa StructuredOptimization.SqrNormL2WithNormalOp
 @test_throws ErrorException normalop_ls(x2)
 
-# IndBallL1 must be marked proximable (needed for multi-variable parsing)
-@test StructuredOptimization.is_proximable(IndBallL1)
-@test StructuredOptimization.is_proximable(IndBallL1{Float64})
-@test StructuredOptimization.is_proximable(norm(x, 1) <= 1.0)
+# IndBallL2 must be marked proximable (needed for multi-variable parsing)
+@test StructuredOptimization.is_proximable(IndBallL2)
+@test StructuredOptimization.is_proximable(IndBallL2{Float64})
+@test StructuredOptimization.is_proximable(norm(x, 2) <= 1.0)
 
 # Properties: separable iff diagonal operator
 @test StructuredOptimization.is_separable(norm(x, 1))
