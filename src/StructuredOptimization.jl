@@ -29,6 +29,13 @@ const TermOrExpr =  Union{Term,AbstractExpression}
 include("calculus/precomposeNonlinear.jl") # TODO move to ProximalOperators?
 include("calculus/sqrNormL2WithNormalOp.jl")
 
+# ArrayPartition dispatch for SeparableSum (multi-variable problems)
+(g::ProximalOperators.SeparableSum)(x::ArrayPartition) = g(x.x)
+ProximalOperators.prox!(y::ArrayPartition, g::ProximalOperators.SeparableSum, x::ArrayPartition, gamma) =
+    ProximalOperators.prox!(y.x, g, x.x, gamma)
+ProximalCore.gradient!(ys::ArrayPartition, f::ProximalOperators.SeparableSum, xs::ArrayPartition) =
+    ProximalCore.gradient!(ys.x, f, xs.x)
+
 # problem parsing
 include("solvers/terms_extract.jl")
 include("solvers/terms_properties.jl")

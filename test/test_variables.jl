@@ -19,3 +19,15 @@ x3i = Variable(xx)
 
 @test typeof(operator(x1)) <: Eye
 @test variables(x1) == x1
+
+# Named variables
+xn = Variable(5; name="myvar")
+@test get_name(xn) == "myvar"
+xd = Variable(5)
+@test get_name(xd) == "x"
+@test sprint(show, xd) == "Variable(Float64, (5,), \"x\")"
+x2n = Variable(Float32, 3, 4; name="M")
+@test get_name(x2n) == "M"
+@test eltype(x2n) == Float32
+@test size(x2n) == (3, 4)
+@test sprint(show, x2n) == "Variable(Float32, (3, 4), \"M\")"

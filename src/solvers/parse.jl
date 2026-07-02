@@ -30,7 +30,7 @@ function can_be_separable_sum(variable_bags)
         if length(term_list) > 1 # more than one term for this variable
             # Check if any of the terms are sliced
             operators = [get_operators_for_var(term, var) for term in term_list]
-            slicing_masks = [is_sliced(op) ? get_slicing_mask(op) : nothing for op in operators]
+            slicing_masks = [is_sliced(op) ? AbstractOperators.get_slicing_mask(op) : nothing for op in operators]
             for i in eachindex(operators)
                 if is_sliced(operators[i])
                     # This operator is sliced, check if it is overlapping with any other sliced operator
@@ -54,7 +54,7 @@ function get_unseparable_pairs(variable_bags)
         if length(term_list) > 1 # more than one term for this variable
             # Check if any of the terms are sliced
             operators = [get_operators_for_var(term, var) for term in term_list]
-            slicing_masks = [is_sliced(op) ? get_slicing_mask(op) : nothing for op in operators]
+            slicing_masks = [is_sliced(op) ? AbstractOperators.get_slicing_mask(op) : nothing for op in operators]
             for i in eachindex(operators)
                 if is_sliced(operators[i])
                     # This operator is sliced, check if it is overlapping with any other sliced operator
@@ -144,7 +144,7 @@ function prepare_proximable_single_var_per_term(variable_bags, variables::NTuple
                     else
                         idx = op.idx
                     end
-                    idxs = (idxs..., get_slicing_mask(op))
+                    idxs = (idxs..., AbstractOperators.get_slicing_mask(op))
                 end
                 fs = (fs..., SlicedSeparableSum(fxi,idxs))
             else
@@ -179,10 +179,10 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.SimpleTerm, vari
             return (assumption.func.first => prepare_proximable_single_var_per_term(variable_bags, variables),)
         else
             op = extract_operators(variables, terms)
-            idxs = get_slicing_expr(op)
+            idxs = AbstractOperators.get_slicing_expr(op)
             op = remove_slicing(op)
-            hcat_ops = tuple([op[i] for i in eachindex(op.A)]...)
-            μs = AbstractOperators.diag_AAc(op)
+            hcat_ops = op.A
+            μs = Tuple(AbstractOperators.diag_AAc(op_i) for op_i in op.A)
             f = extract_functions(terms)
             return (assumption.func.first => PrecomposedSlicedSeparableSum(f.fs, idxs, hcat_ops, μs),)
         end
