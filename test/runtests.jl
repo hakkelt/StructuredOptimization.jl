@@ -38,7 +38,7 @@ Random.seed!(0)
 		Aqua.test_ambiguities(
 			StructuredOptimization; exclude=[Base.:(+), Base.:<=, Base.:>=], broken=true
 		)
-		Aqua.test_persistent_tasks(StructuredOptimization; broken=true)
+		Aqua.test_persistent_tasks(StructuredOptimization)
 		Aqua.test_piracies(
 			StructuredOptimization;
 			treat_as_own=[
@@ -48,7 +48,6 @@ Random.seed!(0)
 				ProximalOperators.prox!,
 				ProximalOperators.gradient,
 				ProximalOperators.gradient!,
-				ProximalOperators.SeparableSum,
 			],
 		)
 	end
