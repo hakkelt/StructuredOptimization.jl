@@ -17,4 +17,5 @@ docs/Manifest.toml
 
 Manifest.toml
 *.cov
+coverage/
 coverage_html/
