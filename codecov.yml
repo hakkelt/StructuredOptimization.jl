@@ -1,0 +1,21 @@
+# Coverage is tracked for visibility, not enforced as a gate.
+# Baseline at the time of adoption: 68% (814/1191 lines).
+# Goal: 90+% (ideally ~95%) — see PLAN.md Phase 4.
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      default:
+        # informational: never fail CI on coverage, just report the delta.
+        informational: true
+        target: 68%
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "reach, diff, files"
+  behavior: default
+  require_changes: false
