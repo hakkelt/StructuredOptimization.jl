@@ -1,4 +1,4 @@
-is_proximable(term::Term) = is_proximable(typeof(term.f)) && is_AAc_diagonal(term.A.L)
+is_proximable(term::Term) = is_proximable(typeof(term.f)) && is_AAc_diagonal(affine(term))
 
 function get_operators_for_var(term, var)
     full_operator = affine(term)

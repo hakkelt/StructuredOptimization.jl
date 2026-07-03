@@ -31,6 +31,10 @@ Random.seed!(0)
 		include("test_phase1_regressions.jl")
 	end
 
+	@testset "Phase 2 absorption" begin
+		include("test_phase2_absorption.jl")
+	end
+
 	@testset "End-to-end tests" begin
 		include("test_usage_small.jl")
 		include("test_usage.jl")

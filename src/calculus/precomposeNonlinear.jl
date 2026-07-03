@@ -35,15 +35,8 @@ function gradient(f::PrecomposeNonlinear, x::ArrayPartition)
   return y, fy
 end
 
-#TODO simplify this
-function gradient!(y::D, f::PrecomposeNonlinear{P,T,D,C}, x::D) where {P,T,D <: ArrayPartition,C}
-    mul!(f.bufC, f.G, x)
-    v = gradient!(f.bufC2, f.g, f.bufC)
-    J = Jacobian(f.G, x)
-    y = mul!(y, J', f.bufC2)
-    return v
-end
-
+# ArrayPartition <: AbstractArray, so this one method covers both the single-array
+# and the multi-variable (ArrayPartition) cases.
 function gradient!(y::D, f::PrecomposeNonlinear{P,T,D,C}, x::D) where {P,T,D <: AbstractArray,C}
     mul!(f.bufC, f.G, x)
     v = gradient!(f.bufC2, f.g, f.bufC)

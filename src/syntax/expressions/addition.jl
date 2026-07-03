@@ -44,36 +44,23 @@ julia> ex3.+z
 ```
 
 """
-function (+)(a::AbstractExpression, b::AbstractExpression)
+# Add (sign=true) or subtract (sign=false) two expressions. When the operand
+# variables match, combine the affine operators directly; otherwise widen both to a
+# shared variable list via Usum_op.
+function _addsub(a::AbstractExpression, b::AbstractExpression, sign::Bool)
   A = convert(Expression,a)
   B = convert(Expression,b)
 	if variables(A) == variables(B)
-    return Expression(A.x,affine(A)+affine(B))
+    return Expression(A.x, sign ? affine(A)+affine(B) : affine(A)-affine(B))
 	else
-		opA = affine(A)
-		xA = variables(A)
-		opB = affine(B)
-		xB = variables(B)
-    xNew, opNew = Usum_op(xA,xB,opA,opB,true)
+    xNew, opNew = Usum_op(variables(A), variables(B), affine(A), affine(B), sign)
     return Expression(xNew,opNew)
 	end
 end
-# sum expressions
 
-function (-)(a::AbstractExpression, b::AbstractExpression)
-  A = convert(Expression,a)
-  B = convert(Expression,b)
-	if variables(A) == variables(B)
-    return Expression(A.x,affine(A)-affine(B))
-	else
-		opA = affine(A)
-		xA = variables(A)
-		opB = affine(B)
-		xB = variables(B)
-    xNew, opNew = Usum_op(xA,xB,opA,opB,false)
-    return Expression(xNew,opNew)
-	end
-end
+(+)(a::AbstractExpression, b::AbstractExpression) = _addsub(a, b, true)
+(-)(a::AbstractExpression, b::AbstractExpression) = _addsub(a, b, false)
+# sum expressions
 
 #unsigned sum affines with single variables
 function Usum_op(xA::Tuple{Variable}, xB::Tuple{Variable}, A::AbstractOperator, B::AbstractOperator, sign::Bool)
@@ -202,34 +189,22 @@ end
 
 #broadcasted + -
 
-function Broadcast.broadcasted(::typeof(+),a::AbstractExpression, b::AbstractExpression)
+# Broadcasted +/-: promote the smaller-codomain operand via BroadCast so the two
+# affine operators share a codomain, then defer to the elementwise +/-.
+function _broadcasted_addsub(a::AbstractExpression, b::AbstractExpression, sign::Bool)
   A = convert(Expression,a)
   B = convert(Expression,b)
   if size(affine(A),1) != size(affine(B),1)
     if prod(size(affine(A),1)) > prod(size(affine(B),1))
-      B = Expression(variables(B),
-                                  BroadCast(affine(B),size(affine(A),1)))
+      B = Expression(variables(B), BroadCast(affine(B),size(affine(A),1)))
     elseif prod(size(affine(B),1)) > prod(size(affine(A),1))
-      A = Expression(variables(A),
-                                  BroadCast(affine(A),size(affine(B),1)))
+      A = Expression(variables(A), BroadCast(affine(A),size(affine(B),1)))
 		end
-    return A+B
 	end
-  return A+B
+  return sign ? A+B : A-B
 end
 
-function Broadcast.broadcasted(::typeof(-),a::AbstractExpression, b::AbstractExpression)
-  A = convert(Expression,a)
-  B = convert(Expression,b)
-  if size(affine(A),1) != size(affine(B),1)
-    if prod(size(affine(A),1)) > prod(size(affine(B),1))
-      B = Expression(variables(B),
-                                  BroadCast(affine(B),size(affine(A),1)))
-    elseif prod(size(affine(B),1)) > prod(size(affine(A),1))
-      A = Expression(variables(A),
-                                  BroadCast(affine(A),size(affine(B),1)))
-		end
-    return A-B
-	end
-  return A-B
-end
+Broadcast.broadcasted(::typeof(+),a::AbstractExpression, b::AbstractExpression) =
+  _broadcasted_addsub(a, b, true)
+Broadcast.broadcasted(::typeof(-),a::AbstractExpression, b::AbstractExpression) =
+  _broadcasted_addsub(a, b, false)
