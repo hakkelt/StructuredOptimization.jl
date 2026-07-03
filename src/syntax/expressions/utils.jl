@@ -25,7 +25,9 @@ julia> variables(ex)
 
 """
 variables(A::Expression)    = A.x
-variables(x::Variable)    = x
+# Return a 1-tuple (matching `Expression`) so callers can treat any expression
+# uniformly and `Iterators.flatten(variables.(...))` never trips on a bare Variable.
+variables(x::Variable)    = (x,)
 
 """
     operator(ex::Expression)

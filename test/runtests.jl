@@ -35,6 +35,10 @@ Random.seed!(0)
 		include("test_phase2_absorption.jl")
 	end
 
+	@testset "Phase 2 matching" begin
+		include("test_phase2_matching.jl")
+	end
+
 	@testset "End-to-end tests" begin
 		include("test_usage_small.jl")
 		include("test_usage.jl")

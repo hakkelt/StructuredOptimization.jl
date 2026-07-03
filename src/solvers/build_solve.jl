@@ -21,6 +21,29 @@ julia> p = problem( ls(A*x - b ) , norm(x) <= 1 );
 julia> StructuredOptimization.parse_problem(p, PANOCplus());
 ```
 """
+# Candidate term-subsets for one assumption, in the order they are tried.
+#
+# The selection preference is: absorb as many terms as possible into a single
+# assumption (largest subsets first). This is a deterministic score — subsets are
+# ranked by `(size, powerset-position)` — so a fixed problem always parses the same
+# way regardless of external iteration order. Enumerating `powerset` largest-first
+# reproduces the historical `reverse(collect(powerset(...)))` order exactly, keeping
+# `parse_problem`/`suggest_algorithm`/`print_diagnostics` behavior stable.
+candidate_term_subsets(remaining_terms) = reverse(collect(powerset(remaining_terms, 1)))
+
+# Try to consume some subset of `remaining_terms` with `assumption`, most-preferred
+# subset first. Returns `(preparation_result, matched_terms)` on the first success,
+# or `nothing` if no subset satisfies the assumption.
+function match_assumption(assumption, remaining_terms, variables)
+    for term_selection in candidate_term_subsets(remaining_terms)
+        preparation_result = prepare(TermSet(term_selection...), assumption, variables)
+        if preparation_result !== nothing
+            return preparation_result, term_selection
+        end
+    end
+    return nothing
+end
+
 function parse_problem(terms::Union{Term,TermSet}, algorithm::T, return_partial::Bool = false) where {T <: IterativeAlgorithm}
     terms = terms isa TermSet ? terms : TermSet(terms)
     assumptions = ProximalAlgorithms.get_assumptions(algorithm)
@@ -28,15 +51,11 @@ function parse_problem(terms::Union{Term,TermSet}, algorithm::T, return_partial:
     remaining_terms = terms
     kwargs = Dict{Symbol, Any}()
     for assumption in assumptions
-        for term_selection in reverse(collect(powerset(remaining_terms, 1)))
-            term_selection = TermSet(term_selection...)
-            preparation_result = prepare(term_selection, assumption, variables)
-            if preparation_result !== nothing
-                term_selection = collect(term_selection)
-                remaining_terms = setdiff(remaining_terms, term_selection)
-                push!(kwargs, preparation_result...)
-                break
-            end
+        match = match_assumption(assumption, remaining_terms, variables)
+        if match !== nothing
+            preparation_result, matched_terms = match
+            remaining_terms = setdiff(remaining_terms, matched_terms)
+            push!(kwargs, preparation_result...)
         end
         if isempty(remaining_terms)
             if return_partial
@@ -61,9 +80,38 @@ function print_diagnostics(terms::Union{Term,TermSet}, algorithm::T) where {T <:
         end
     end
     println("The following terms could not be prepared:")
+    variables = extract_variables(terms)
+    assumptions = ProximalAlgorithms.get_assumptions(algorithm)
     for term in remaining_terms
-        println(" - $term")
+        reasons = unsatisfied_reasons(term, assumptions)
+        if isempty(reasons)
+            println(" - $term")
+        else
+            # Phase 2.4: surface *why* the term was rejected (the DCP-style failed
+            # property), so a solver mismatch fails legibly instead of silently.
+            println(" - $term (unsatisfied: $(join(reasons, "; ")))")
+        end
     end
+end
+
+# Function-side predicate list of an assumption, or `nothing` if it has none
+# (e.g. LeastSquaresTerm / OperatorTermWithInfimalConvolution).
+_assumption_func(assumption) = hasproperty(assumption, :func) ? assumption.func : nothing
+
+# Compact, deduplicated list of "<role>: <unmet properties>" strings explaining why
+# `term` fails each of `assumptions`' function-side predicate sets.
+function unsatisfied_reasons(term, assumptions)
+    reasons = String[]
+    for assumption in assumptions
+        item = _assumption_func(assumption)
+        item === nothing && continue
+        unmet = unsatisfied_properties(term, item)
+        if !isempty(unmet)
+            reason = "$(item.first) requires $(join((nameof(p) for p in unmet), ", "))"
+            reason in reasons || push!(reasons, reason)
+        end
+    end
+    return reasons
 end
 
 function parse_problem(terms::Union{Term,TermSet})
