@@ -67,6 +67,18 @@ function parse_problem(terms::Union{Term, TermSet}, algorithm::T, return_partial
     return return_partial ? (kwargs, remaining_terms) : nothing
 end
 
+"""
+    print_diagnostics(terms::Union{Term,TermSet}[, algorithm])
+
+Explain how a problem matches (or fails to match) a solver's assumptions. With an
+`algorithm`, print the assumed problem form, the terms that were successfully
+prepared, and — for each term that could not be prepared — the unsatisfied property
+(e.g. `is_convex`, `is_proximable`) that blocked it. Without an `algorithm`, report
+the closest-matching algorithm and diagnose against it.
+
+This is the tool to reach for when [`solve`](@ref) or [`@minimize`](@ref) errors with
+"cannot parse this problem": it names the DCP-style property the problem violates.
+"""
 function print_diagnostics(terms::Union{Term, TermSet}, algorithm::T) where {T <: IterativeAlgorithm}
     terms = terms isa TermSet ? terms : TermSet(terms)
     kwargs, remaining_terms = parse_problem(terms, algorithm, true)
@@ -126,6 +138,22 @@ function parse_problem(terms::Union{Term, TermSet})
     return nothing
 end
 
+"""
+    suggest_algorithm(terms::Union{Term,TermSet}[, algorithms])
+
+Return the list of algorithms (from `algorithms`, defaulting to every algorithm
+`ProximalAlgorithms` advertises) whose assumptions the problem `terms` can be parsed
+into. An empty result means no available algorithm matches the problem structure; use
+[`print_diagnostics`](@ref) to see why.
+
+# Example
+
+```julia
+julia> x = Variable(4); A, b = randn(10, 4), randn(10);
+
+julia> suggest_algorithm(problem(ls(A*x - b) + 1e-2*norm(x, 1)))
+```
+"""
 function suggest_algorithm(terms::Union{Term, TermSet}, algorithms = ProximalAlgorithms.get_algorithms())
     terms = terms isa TermSet ? terms : TermSet(terms)
     suitable_algs = []
@@ -154,6 +182,16 @@ end
 
 export solve
 
+# Run a solver on an already-parsed problem, apply kwarg overrides, and write the
+# minimizer back into the variable. `x_star` may be a Tuple for multi-variable
+# problems; take its first block in that case (the shared write-back convention).
+function _run_solver(solver, term_kwargs, x; kwargs...)
+    solver = override_parameters(solver; kwargs...)
+    x_star, it = solver(; x0 = ~x, term_kwargs...)
+    ~x .= x_star isa Tuple ? x_star[1] : x_star
+    return x, it
+end
+
 """
     solve(terms::Union{Term,TermSet}; kwargs...)
 	solve(terms::Union{Term,TermSet}, solver::IterativeAlgorithm; kwargs...)
@@ -173,21 +211,11 @@ julia> A, b = randn(10,4), randn(10);
 
 julia> p = problem(ls(A*x - b ), norm(x) <= 1);
 
-julia> solve(p, PANOCplus(); maxiter=10);
+julia> solve(p, PANOCplus(); maxit=10);
 
 julia> ~x
 ```
 """
-# Run a solver on an already-parsed problem, apply kwarg overrides, and write the
-# minimizer back into the variable. `x_star` may be a Tuple for multi-variable
-# problems; take its first block in that case (the shared write-back convention).
-function _run_solver(solver, term_kwargs, x; kwargs...)
-    solver = override_parameters(solver; kwargs...)
-    x_star, it = solver(; x0 = ~x, term_kwargs...)
-    ~x .= x_star isa Tuple ? x_star[1] : x_star
-    return x, it
-end
-
 function solve(terms::Union{Term, TermSet}, solvers::Union{<:AbstractVector{<:IterativeAlgorithm}, <:Tuple{Vararg{IterativeAlgorithm}}}; kwargs...)
     terms = terms isa TermSet ? terms : TermSet(terms)
     for solver in solvers

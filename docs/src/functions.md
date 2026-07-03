@@ -8,6 +8,7 @@ or [Equality constraints](@ref).
 
 ```@docs
 ls
+normalop_ls
 huberloss
 sqrhingeloss
 crossentropy
@@ -53,8 +54,18 @@ In some cases it is more convenient to solve the *dual problem* instead
 of the primal problem. It is possible to convert a problem into its dual
 by means of the *convex conjugate*.
 
-See the [Total Variation demo](https://github.com/kul-forbes/StructuredOptimization.jl/blob/master/demos/TotalVariationDenoising.ipynb) for an example of such procedure.
+See the [Total Variation demo](https://github.com/hakkelt/StructuredOptimization.jl/blob/master/demos/TotalVariationDenoising.ipynb) for an example of such procedure.
 
 ```@docs
 conj
+```
+
+## Recording terms for diagnostics
+
+The [`@term`](@ref) macro captures the source text of a term so it can be shown
+later (e.g. by [`print_diagnostics`](@ref StructuredOptimization.print_diagnostics))
+when a problem cannot be parsed.
+
+```@docs
+@term
 ```

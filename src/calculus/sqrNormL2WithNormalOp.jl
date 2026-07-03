@@ -1,7 +1,7 @@
 # squared L2 norm (times a constant, or weighted) precomposed with an operator
 
 """
-    SqrNormL2WithNormalOp(λ=1, L::LinearOperator)
+    SqrNormL2WithNormalOp(L::LinearOperator, λ=1)
 
 With a nonnegative scalar `λ`, return the squared Euclidean norm
 ```math
@@ -16,7 +16,7 @@ This is a special case of the more general `Precompose(SqrNormL2(), L, 1, 0)` op
 where `L` is a linear operator, and only the gradient is needed, not the proximal operator.
 The gradient of the precomposed squared norm is
 ```math
-\nabla f(x) = Lᴴ * L * x,
+\\nabla f(x) = Lᴴ * L * x,
 ```
 and in many cases, there is an optimized implementation of the normal operator `Lᴴ * L`
 that makes the compution of the gradient much faster than the naive implementation.

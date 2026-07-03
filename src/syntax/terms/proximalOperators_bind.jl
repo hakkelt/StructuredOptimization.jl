@@ -86,7 +86,6 @@ gradient is computed as usual, but the squared norm of the gradient (i.e. the
 squared norm of `Lᴴ * L * x`) is returned instead of the squared norm of `L * x`.
 This is much faster to compute, if `Lᴴ * L` has a fast implementation.
 """
-
 normalop_ls(::Variable) = error("normalop_ls does not work with Variables alone. Use ls instead.")
 function normalop_ls(ex::Expression)
     eye_op = if length(ex.x) == 1
