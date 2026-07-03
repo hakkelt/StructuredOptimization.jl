@@ -49,8 +49,13 @@ function get_structure(op, vars)
             if value isa AbstractOperators.AbstractOperator
                 return get_structure(value, vars)
             elseif value isa Tuple
+                # Recurse into the first operator-valued element (these pass-through
+                # wrappers wrap a single operand); a non-operator first element must
+                # not be recursed into.
                 for v in value
-                    return get_structure(v, vars)
+                    if v isa AbstractOperators.AbstractOperator
+                        return get_structure(v, vars)
+                    end
                 end
             end
         end
@@ -89,7 +94,7 @@ struct UnregularIndex{N}
 end
 
 Base.first(iter::UnregularIndex) = tuple(fill(1, length(iter.max))...)
-Base.length(iter::UnregularIndex) = sum(iter.max)
+Base.length(iter::UnregularIndex) = prod(iter.max)
 
 function Base.iterate(iter::UnregularIndex)
     state = first(iter)

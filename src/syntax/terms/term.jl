@@ -101,11 +101,11 @@ import Base: *
 
 function (*)(a::T1, t::Term{T,T2,T3}) where {T1<:Real,T,T2,T3}
 	coeff = *(promote(a, t.lambda)...)
-	Term(coeff, t.f, t.A)
+	Term(coeff, t.f, t.A, t.repr)
 end
 
 function (*)(a::T1, t::TermSet) where {T1<:Real}
-    return a .* t
+    return TermSet((a * ti for ti in t)...)
 end
 
 # Properties

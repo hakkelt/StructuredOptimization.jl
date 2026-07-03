@@ -28,6 +28,9 @@ difference, and it is much faster to compute.
 """
 struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator,L2<:AbstractOperator}
     A::L
+    # Normal operator used for the gradient. For scalar λ it is AᴴA (the weight is
+    # applied afterwards); for array λ it is the *weighted* normal operator
+    # Aᴴ·diag(λ)·A, so the gradient Aᴴ·diag(λ)·A·x is computed in one mul!.
     AᴴA::L2
     lambda::T
     function SqrNormL2WithNormalOp(A, lambda)
@@ -35,10 +38,17 @@ struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator,L2<:AbstractOperator}
         @assert is_linear(A)
         if any(lambda .< 0)
             error("coefficients in λ must be nonnegative")
+        end
+        # Strong convexity of x ↦ ½‖diag(√λ)·A·x‖² needs a positive weight *and* an
+        # injective operator (full column rank), otherwise the null space of A is flat.
+        strongly_convex = all(lambda .> 0) && is_full_column_rank(A)
+        if lambda isa AbstractArray
+            W = AbstractOperators.DiagOp(AbstractOperators.codomain_type(A), size(A, 1), lambda)
+            AᴴA = A' * W * A
         else
             AᴴA = A' * A
-            new{typeof(lambda),all(lambda .> 0),typeof(A),typeof(AᴴA)}(A, AᴴA, lambda)
         end
+        return new{typeof(lambda),strongly_convex,typeof(A),typeof(AᴴA)}(A, AᴴA, lambda)
     end
 end
 
@@ -46,7 +56,7 @@ is_convex(::Type{<:SqrNormL2WithNormalOp}) = true
 is_smooth(::Type{<:SqrNormL2WithNormalOp}) = true
 is_separable(::Type{<:SqrNormL2WithNormalOp}) = true
 is_generalized_quadratic(::Type{<:SqrNormL2WithNormalOp}) = true
-is_strongly_convex(::Type{SqrNormL2WithNormalOp{T,SC}}) where {T,SC} = SC
+is_strongly_convex(::Type{<:SqrNormL2WithNormalOp{T,SC}}) where {T,SC} = SC
 
 SqrNormL2WithNormalOp(A) = SqrNormL2WithNormalOp(A, 1)
 
@@ -78,11 +88,12 @@ end
 
 function gradient!(y, f::SqrNormL2WithNormalOp{<:AbstractArray}, x)
     R = real(eltype(y))
+    # f.AᴴA is the weighted normal operator Aᴴ·diag(λ)·A, so this is exactly the
+    # gradient ∇f(x) = Aᴴ·diag(λ)·A·x (weights applied in the codomain, not the domain).
     mul!(y, f.AᴴA, x)
     sqnx = R(0)
     for k in eachindex(y)
-        y[k] *= f.lambda[k]
-        sqnx += f.lambda[k] * abs2(y[k])
+        sqnx += abs2(y[k])
     end
     return sqnx / R(2)
 end

@@ -27,6 +27,10 @@ Random.seed!(0)
 		include("test_build_minimize.jl")
 	end
 
+	@testset "Phase 1 regressions" begin
+		include("test_phase1_regressions.jl")
+	end
+
 	@testset "End-to-end tests" begin
 		include("test_usage_small.jl")
 		include("test_usage.jl")
@@ -42,6 +46,10 @@ Random.seed!(0)
 		Aqua.test_piracies(
 			StructuredOptimization;
 			treat_as_own=[
+				# Intentional cross-interface bridges (see StructuredOptimization.jl):
+				# these adapt ProximalOperators-style gradients to ProximalAlgorithms'
+				# value_and_gradient interface for the composite smooth functions this
+				# package builds, and cannot be restricted to owned types.
 				ProximalAlgorithms.value_and_gradient,
 				ProximalAlgorithms.value_and_gradient!,
 				ProximalOperators.prox,

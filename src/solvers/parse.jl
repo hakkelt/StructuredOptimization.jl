@@ -105,7 +105,7 @@ unsatisfied_properties(term, assumptions::ProximalAlgorithms.AssumptionItem) = [
 does_satisfy(term, assumptions::ProximalAlgorithms.AssumptionItem) = all(property_func(term) for property_func in assumptions.second)
 
 function prepare(term::Term, assumption::ProximalAlgorithms.SimpleTerm, variables::NTuple{N, Variable}) where N
-    if does_satisfy(term, assumption.func) && (!(ProximalCore.is_proximable in assumption.func.second) || is_AAc_diagonal(term.A.L))
+    if does_satisfy(term, assumption.func) && (!(ProximalCore.is_proximable in assumption.func.second) || is_AAc_diagonal(affine(term)))
         op = extract_operators(variables, term)
         disp = displacement(term)
         return (assumption.func.first => merge_function_with_operator(op, term.f, disp, term.lambda),)
@@ -118,7 +118,7 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.SimpleTerm
     repr = term.repr !== nothing ? term.repr : string(term)
     problematic_properties = unsatisfied_properties(term, assumption.func)
     if length(problematic_properties) == 0
-        println("Term $repr satisfies all required properties, but the following operator is not AAc diagonal: ", term.A.L)
+        println("Term $repr satisfies all required properties, but the following operator is not AAc diagonal: ", affine(term))
     else
         println("Term $repr does not satisfy required property: $(join(problematic_properties, ", "))")
     end
@@ -192,9 +192,10 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.SimpleTerm, vari
             if is_linear(term)
                 f = merge_function_with_operator(extract_operators(variables, term), term.f, displacement(term), term.lambda)
             else
-                f = extract_functions(term)
+                # Displacement is carried once by the affine operator; use the raw
+                # `term.f` (no displacement-folding) and apply λ exactly once.
                 op = extract_affines(variables, term)
-                f = PrecomposeNonlinear(f, op)
+                f = PrecomposeNonlinear(term.f, op)
                 f = term.lambda == 1 ? f : Postcompose(f, term.lambda)
             end
             fs = (fs..., f)
@@ -282,7 +283,8 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTerm, va
         return prepare(terms[1], assumption, variables)
     end
     op = extract_affines(variables, terms)
-    f = extract_functions(terms)
+    # Displacement lives in the affine operator `op`; never fold it into `f` too.
+    f = extract_functions_nodisp(terms)
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func)
         return (
             assumption.func.first => f,
@@ -325,7 +327,8 @@ end
 
 function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTermWithInfimalConvolution, variables::NTuple{N, Variable}) where {N}
     op = extract_affines(variables, term)
-    f = extract_functions(term)
+    # Displacement lives in the affine operator `op`; never fold it into `f` too.
+    f = extract_functions_nodisp(term)
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₁)
         return (
             assumption.func₁.first => f,
@@ -334,7 +337,7 @@ function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTermWithInfi
     elseif does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₂)
         return (
             assumption.func₂.first => f,
-            assumption.operator.first => affine(term)
+            assumption.operator.first => op
         )
     else
         # try preparing as a simple term
@@ -380,7 +383,8 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTermWith
         return prepare(terms[1], assumption, variables)
     end
     op = extract_affines(variables, terms)
-    f = extract_functions(terms)
+    # Displacement lives in the affine operator `op`; never fold it into `f` too.
+    f = extract_functions_nodisp(terms)
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₁)
         return (
             assumption.func₁.first => f,
@@ -389,7 +393,7 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTermWith
     elseif does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₂)
         return (
             assumption.func₂.first => f,
-            assumption.operator.first => affine(terms[1].A)
+            assumption.operator.first => op
         )
     else
         # try preparing as a simple term
@@ -410,7 +414,7 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Operat
         print_diagnostics(terms[1], assumption, variables)
         return
     end
-    op = affine(terms[1].A)
+    op = affine(terms[1])
     f = extract_functions(terms)
     repr = string(terms)
     if is_eye(op)
@@ -449,26 +453,38 @@ end
 
 function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where N
     f = term.f
-    f_is_ls = f isa ProximalOperators.LeastSquares || f isa ProximalOperators.SqrNormL2 || f isa SqrNormL2WithNormalOp
-    if !f_is_ls
-        return nothing
-    end
+    # The CG-family objective is ‖A x - b‖² but StructuredOptimization stores the
+    # displacement `d` of `A x + d`, so the least-squares target is b = -d.
     if f isa SqrNormL2WithNormalOp
         lambda = term.lambda * f.lambda
-        op = term.f.A
-        b = displacement(op)
+        op = f.A
+        b = -displacement(op)
         op = remove_displacement(op)
-    else
-        lambda = term.lambda
+    elseif f isa ProximalOperators.SqrNormL2
+        # Fold the function's own weight f.lambda in as well (it was ignored before).
+        lambda = term.lambda * f.lambda
         op = extract_operators(variables, term)
-        b = displacement(term)
+        b = -displacement(term)
+    else
+        # ProximalOperators.LeastSquares carries its own embedded operator and vector
+        # that this path does not read; reject rather than silently mis-scale it.
+        return nothing
+    end
+    # Only scalar weights can be folded into the operator; array weights would need a
+    # diagonal reweighting the CG-family objective does not model here.
+    if lambda isa AbstractArray
+        return nothing
     end
     if !does_satisfy(op, assumption.operator)
         return nothing
     end
-    if lambda != 1
-        op = lambda * op
-        b = lambda * b
+    # CG-family objective is ‖A x - b‖² + λ_reg‖x‖², where SquaredL2Term maps the
+    # regularizer to λ_reg = term.lambda*f.lambda (no ½). To keep the data term at the
+    # correct *relative* weight, scale the residual by √λ, not by λ.
+    c = sqrt(lambda)
+    if c != 1
+        op = c * op
+        b = c * b
     end
     return (
         assumption.operator.first => op,
@@ -478,7 +494,7 @@ end
 
 function print_diagnostics(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where N
     op = extract_operators(variables, term)
-    b = displacement(term)
+    b = -displacement(term)
     f = term.f
     repr = term.repr !== nothing ? term.repr : string(term)
     if !(f isa ProximalOperators.LeastSquares || f isa ProximalOperators.SqrNormL2)

@@ -129,7 +129,17 @@ julia> solve(p, PANOCplus(); maxiter=10);
 julia> ~x
 ```
 """
-function solve(terms::Union{Term,TermSet}, solvers::Union{<:AbstractVector{IterativeAlgorithm},<:Tuple{Vararg{IterativeAlgorithm}}}; kwargs...)
+# Run a solver on an already-parsed problem, apply kwarg overrides, and write the
+# minimizer back into the variable. `x_star` may be a Tuple for multi-variable
+# problems; take its first block in that case (the shared write-back convention).
+function _run_solver(solver, term_kwargs, x; kwargs...)
+    solver = override_parameters(solver; kwargs...)
+    x_star, it = solver(; x0 = ~x, term_kwargs...)
+    ~x .= x_star isa Tuple ? x_star[1] : x_star
+    return x, it
+end
+
+function solve(terms::Union{Term,TermSet}, solvers::Union{<:AbstractVector{<:IterativeAlgorithm},<:Tuple{Vararg{IterativeAlgorithm}}}; kwargs...)
     terms = terms isa TermSet ? terms : TermSet(terms)
     for solver in solvers
         result = parse_problem(terms, solver)
@@ -137,10 +147,7 @@ function solve(terms::Union{Term,TermSet}, solvers::Union{<:AbstractVector{Itera
             continue
         end
         _, term_kwargs, x = result
-        solver = override_parameters(solver; kwargs...)
-        x_star, it = solver(; x0 = ~x, term_kwargs...)
-        ~x .= x_star isa Tuple ? x_star[1] : x_star
-        return x, it
+        return _run_solver(solver, term_kwargs, x; kwargs...)
     end
     if length(solvers) == 1
         print_diagnostics(terms, solvers[1])
@@ -159,10 +166,7 @@ function solve(terms::Union{Term,TermSet}, solver::IterativeAlgorithm; kwargs...
 		error("Sorry, I cannot parse this problem for solver of type $(typeof(solver).parameters[1])")
 	end
 	_, term_kwargs, x = result
-    solver = override_parameters(solver; kwargs...)
-    x_star, it = solver(; x0 = ~x, term_kwargs...)
-	~x .= x_star isa Tuple ? x_star[1] : x_star
-	return x, it
+    return _run_solver(solver, term_kwargs, x; kwargs...)
 end
 
 function solve(terms::Union{Term,TermSet}; kwargs...)
@@ -173,8 +177,5 @@ function solve(terms::Union{Term,TermSet}; kwargs...)
 		error("Sorry, I cannot find a suitable solver for this problem")
 	end
 	solver, term_kwargs, x = result
-    solver = override_parameters(solver; kwargs...)
-    x_star, it = solver(; x0 = ~x, term_kwargs...)
-	~x .= x_star
-	return x, it
+    return _run_solver(solver, term_kwargs, x; kwargs...)
 end
