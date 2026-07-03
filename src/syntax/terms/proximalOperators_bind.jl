@@ -27,7 +27,7 @@ f(\\mathbf{X}) = \\sum_i \\| \\mathbf{x}_i \\|
 where ``\\mathbf{x}_i`` is the ``i``-th column if `dim == 1` (or row if  `dim == 2`) of ``\\mathbf{X}``.
 
 """
-function norm(ex::AbstractExpression, p::Real=2)
+function norm(ex::AbstractExpression, p::Real = 2)
     if p == 0
         f = NormL0()
     elseif p == 1
@@ -99,10 +99,10 @@ end
 
 import Base: ^
 
-function (^)(t::Term{T1,T2,T3}, exp::Integer) where {T1, T2  <: NormL2, T3}
+function (^)(t::Term{T1, T2, T3}, exp::Integer) where {T1, T2 <: NormL2, T3}
     if exp == 2
         # The coefficient 2.0 is due to the fact that SqrNormL2 divides by 2.0
-        return t.lambda^2*Term(SqrNormL2(2.0), t.A)
+        return t.lambda^2 * Term(SqrNormL2(2.0), t.A)
     else
         error("function not implemented")
     end
@@ -121,8 +121,8 @@ f( \\mathbf{x} ) = \\sum_{i} \\max\\{0, 1 - y_i x_i \\},
 ```
 where `y` is an array containing ``y_i``.
 """
-hingeloss(ex::AbstractExpression, b::Array{R,1}) where {R <: Real} =
-Term(HingeLoss(b), ex)
+hingeloss(ex::AbstractExpression, b::Array{R, 1}) where {R <: Real} =
+    Term(HingeLoss(b), ex)
 
 # HingeLoss
 
@@ -137,8 +137,8 @@ f( \\mathbf{x} ) = \\sum_{i} \\max\\{0, 1 - y_i x_i \\}^2,
 ```
 where `y` is an array containing ``y_i``.
 """
-sqrhingeloss(ex::AbstractExpression, b::Array{R,1}) where {R <: Real} =
-Term(SqrHingeLoss(b), ex)
+sqrhingeloss(ex::AbstractExpression, b::Array{R, 1}) where {R <: Real} =
+    Term(SqrHingeLoss(b), ex)
 
 # CrossEntropy
 
@@ -153,8 +153,8 @@ f(\\mathbf{x}) = -1/N \\sum_{i}^{N} y_i \\log (x_i)+(1-y_i) \\log (1-x_i),
 ```
 where `y` is an array of length ``N`` containing ``y_i`` having ``0 \\leq y_i \\leq 1``.
 """
-crossentropy(ex::AbstractExpression, b::Array{R,1}) where {R <: Real} =
-Term(CrossEntropy(b), ex)
+crossentropy(ex::AbstractExpression, b::Array{R, 1}) where {R <: Real} =
+    Term(CrossEntropy(b), ex)
 
 # LogisticLoss
 
@@ -169,7 +169,7 @@ f(\\mathbf{x}) = \\sum_i \\log(1 + \\exp(-y_i x_i)).
 ```
 """
 logisticloss(ex::AbstractExpression, y::AbstractArray) =
-Term(LogisticLoss(y, 1.0), ex)
+    Term(LogisticLoss(y, 1.0), ex)
 
 # LogBarrier
 
@@ -184,7 +184,7 @@ f(\\mathbf{x}) = -\\sum_i \\log( x_i ).
 ```
 """
 logbarrier(ex::AbstractExpression) =
-Term(LogBarrier(1.0), ex)
+    Term(LogBarrier(1.0), ex)
 
 # HuberLoss
 
@@ -202,7 +202,7 @@ f(\\mathbf{x}) = \\begin{cases}
 ```
 """
 huberloss(ex::AbstractExpression, rho::R = 1.0) where {R <: Real} =
-Term(HuberLoss(rho), ex)
+    Term(HuberLoss(rho), ex)
 
 import Base: maximum
 
@@ -215,7 +215,7 @@ f(\\mathbf{x}) = \\max \\{x_i : i = 1,\\ldots, n \\}.
 ```
 """
 maximum(ex::AbstractExpression) =
-Term(Maximum(), ex)
+    Term(Maximum(), ex)
 
 export sumpositive
 
@@ -228,7 +228,7 @@ f(\\mathbf{x}) = \\sum_i \\max \\{x_i, 0\\}.
 ```
 """
 sumpositive(ex::AbstractExpression) =
-Term(SumPositive(), ex)
+    Term(SumPositive(), ex)
 
 import LinearAlgebra: dot
 export dot
@@ -242,7 +242,7 @@ f(\\mathbf{x}) = \\mathbf{c}^{T}\\mathbf{x}.
 ```
 """
 dot(c::AbstractVector, ex::AbstractExpression) =
-Term(Linear(c), ex)
+    Term(Linear(c), ex)
 
 
 # Inequalities
@@ -290,11 +290,11 @@ Inequalities constrains
   Notice that the expression `X` must have a codomain with dimension equal to 2.
 
 """
-(<=)(t::Term{T1,T2,T3}, r::Integer) where {T1,T2 <: NormL0,T3} =
-Term(IndBallL0(round(Int,r/t.lambda)), t.A)
-(<=)(t::Term{T1,T2,T3}, r::Real) where {T1, T2 <: NormL1, T3} = Term(IndBallL1(r/t.lambda), t.A)
-(<=)(t::Term{T1,T2,T3}, r::Real) where {T1, T2 <: NormL2, T3} = Term(IndBallL2(r/t.lambda), t.A)
-(<=)(t::Term{T1,T2,T3}, r::Real) where {T1, T4 <: IndBallL1, T2 <: Conjugate{T4}, T3} = Term(IndBallLinf(r/t.lambda), t.A)
+(<=)(t::Term{T1, T2, T3}, r::Integer) where {T1, T2 <: NormL0, T3} =
+    Term(IndBallL0(round(Int, r / t.lambda)), t.A)
+(<=)(t::Term{T1, T2, T3}, r::Real) where {T1, T2 <: NormL1, T3} = Term(IndBallL1(r / t.lambda), t.A)
+(<=)(t::Term{T1, T2, T3}, r::Real) where {T1, T2 <: NormL2, T3} = Term(IndBallL2(r / t.lambda), t.A)
+(<=)(t::Term{T1, T2, T3}, r::Real) where {T1, T4 <: IndBallL1, T2 <: Conjugate{T4}, T3} = Term(IndBallLinf(r / t.lambda), t.A)
 
 # Box constraints
 
@@ -328,7 +328,7 @@ rank(ex::AbstractExpression) = Term(Rank(), ex)
 
 import Base: <=
 
-(<=)(t::Term{T1,T2,T3} where {T1, T2 <: Rank, T3}, r::Int) = Term(IndBallRank(round(Int,r/t.lambda)), t.A)
+(<=)(t::Term{T1, T2, T3} where {T1, T2 <: Rank, T3}, r::Int) = Term(IndBallRank(round(Int, r / t.lambda)), t.A)
 
 import Base: ==
 
@@ -363,25 +363,25 @@ Equalities constraints
   ``\\mathbf{x} = \\mathbf{l}`` or ``\\mathbf{x} = \\mathbf{u}``
 
 """
-(==)(t::Term{T1,T2,T3}, r::Real)  where {T1,T2 <: NormL2,T3} = Term(IndSphereL2(r/t.lambda), t.A)
+(==)(t::Term{T1, T2, T3}, r::Real) where {T1, T2 <: NormL2, T3} = Term(IndSphereL2(r / t.lambda), t.A)
 # IndSphereL2
 
-(==)(ex::AbstractExpression, lu::Tuple{Union{Real,AbstractArray},Union{Real,AbstractArray}}) =
-Term(IndBinary(lu...), ex)
+(==)(ex::AbstractExpression, lu::Tuple{Union{Real, AbstractArray}, Union{Real, AbstractArray}}) =
+    Term(IndBinary(lu...), ex)
 # IndBinary
 
 # IndAffine
-function (==)(ex::AbstractExpression, b::Union{Real,AbstractArray})
+function (==)(ex::AbstractExpression, b::Union{Real, AbstractArray})
     op = operator(ex)
-    d  = displacement(ex)
+    d = displacement(ex)
     if typeof(op) <: MatrixOp
         A = op.A
-        bb = b.-d
+        bb = b .- d
         p = IndAffine(A, bb)
         return Term(p, variables(ex)[1])
     else
-       # TODO change this
-       error("Currently affine equality supported only with `MatrixOp`")
+        # TODO change this
+        error("Currently affine equality supported only with `MatrixOp`")
     end
 end
 
@@ -411,7 +411,7 @@ julia> t = conj(norm(x,1))
 """
 function conj(t::Term)
     if typeof(operator(t)) <: Eye
-        return Term(1.0,Conjugate(Postcompose(t.f,t.lambda)),t.A)
+        return Term(1.0, Conjugate(Postcompose(t.f, t.lambda)), t.A)
     else
         error("cannot perform convex conjugation")
     end
@@ -444,7 +444,7 @@ julia> t = smooth(norm(x,1))
 """
 function smooth(t::Term, gamma = 1.0)
     if !is_smooth(t)
-        return Term(1.0,MoreauEnvelope(Postcompose(t.f,t.lambda),gamma),t.A)
+        return Term(1.0, MoreauEnvelope(Postcompose(t.f, t.lambda), gamma), t.A)
     else
         return t
     end

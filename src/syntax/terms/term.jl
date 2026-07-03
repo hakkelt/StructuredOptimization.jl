@@ -1,47 +1,47 @@
-struct Term{T1<:Real,T2,T3<:AbstractExpression}
-	lambda::T1
-	f::T2
-	A::T3
-	repr::Union{String,Nothing}
-	function Term(lambda::T1, f::T2, A::T3, repr::Union{String,Nothing}) where {T1<:Real,T2,T3<:AbstractExpression}
-		T1_ = real(codomain_type(affine(A)))
-		lambda = convert(T1_, lambda)
-		return new{T1_,T2,T3}(lambda, f, A, repr)
-	end
+struct Term{T1 <: Real, T2, T3 <: AbstractExpression}
+    lambda::T1
+    f::T2
+    A::T3
+    repr::Union{String, Nothing}
+    function Term(lambda::T1, f::T2, A::T3, repr::Union{String, Nothing}) where {T1 <: Real, T2, T3 <: AbstractExpression}
+        T1_ = real(codomain_type(affine(A)))
+        lambda = convert(T1_, lambda)
+        return new{T1_, T2, T3}(lambda, f, A, repr)
+    end
 end
 
 function Term(lambda, f, ex::AbstractExpression)
-	return Term(lambda, f, ex, nothing)
+    return Term(lambda, f, ex, nothing)
 end
 
 function Term(f, ex::AbstractExpression)
-	A = convert(Expression, ex)
-	Term(1, f, A)
+    A = convert(Expression, ex)
+    return Term(1, f, A)
 end
 
 function Term(f, ex::AbstractExpression, repr::String)
-	A = convert(Expression, ex)
-	Term(1, f, A, repr)
+    A = convert(Expression, ex)
+    return Term(1, f, A, repr)
 end
 
 function Term(t::Term, repr::String)
-	Term(t.lambda, t.f, t.A, repr)
+    return Term(t.lambda, t.f, t.A, repr)
 end
 
-struct TermSet{N,T}
-	terms::T
-	function TermSet(terms...)
-		@assert all(t -> t isa Term, terms) "All elements must be of type Term"
-		new{length(terms), typeof(terms)}(terms)
-	end
+struct TermSet{N, T}
+    terms::T
+    function TermSet(terms...)
+        @assert all(t -> t isa Term, terms) "All elements must be of type Term"
+        return new{length(terms), typeof(terms)}(terms)
+    end
 end
 
-function Base.iterate(t::TermSet{N}, state=1) where {N}
-	if state > N
-		return nothing
-	else
-		return (t.terms[state], state + 1)
-	end
+function Base.iterate(t::TermSet{N}, state = 1) where {N}
+    if state > N
+        return nothing
+    else
+        return (t.terms[state], state + 1)
+    end
 end
 
 Base.length(::TermSet{N}) where {N} = N
@@ -55,33 +55,33 @@ import Base: ==, show
 ==(t1::Term, t2::Term) = t1.lambda == t2.lambda && t1.f == t2.f && t1.A == t2.A
 
 function show(io::IO, t::Term)
-	if t.repr !== nothing
-		print(io, t.repr)
-	else
-		print(io, t.lambda, " * ", t.f, "(", t.A, ")")
-	end
+    return if t.repr !== nothing
+        print(io, t.repr)
+    else
+        print(io, t.lambda, " * ", t.f, "(", t.A, ")")
+    end
 end
 
 function show(io::IO, t::TermSet)
-	non_indicator_terms = filter(x -> !is_set_indicator(x), t.terms)
-	indicator_terms = filter(is_set_indicator, t.terms)
-	for i in 1:length(non_indicator_terms)
-		show(io, non_indicator_terms[i])
-		if i < length(non_indicator_terms)
-			print(io, " + ")
-		end
-	end
-	if !isempty(indicator_terms)
-		if !isempty(non_indicator_terms)
-			print(io, " s.t. ")
-		end
-		for i in 1:length(indicator_terms)
-			show(io, indicator_terms[i])
-			if i < length(indicator_terms)
-				print(io, ", ")
-			end
-		end
-	end
+    non_indicator_terms = filter(x -> !is_set_indicator(x), t.terms)
+    indicator_terms = filter(is_set_indicator, t.terms)
+    for i in 1:length(non_indicator_terms)
+        show(io, non_indicator_terms[i])
+        if i < length(non_indicator_terms)
+            print(io, " + ")
+        end
+    end
+    return if !isempty(indicator_terms)
+        if !isempty(non_indicator_terms)
+            print(io, " s.t. ")
+        end
+        for i in 1:length(indicator_terms)
+            show(io, indicator_terms[i])
+            if i < length(indicator_terms)
+                print(io, ", ")
+            end
+        end
+    end
 end
 
 # Operations
@@ -99,12 +99,12 @@ import Base: +
 
 import Base: *
 
-function (*)(a::T1, t::Term{T,T2,T3}) where {T1<:Real,T,T2,T3}
-	coeff = *(promote(a, t.lambda)...)
-	Term(coeff, t.f, t.A, t.repr)
+function (*)(a::T1, t::Term{T, T2, T3}) where {T1 <: Real, T, T2, T3}
+    coeff = *(promote(a, t.lambda)...)
+    return Term(coeff, t.f, t.A, t.repr)
 end
 
-function (*)(a::T1, t::TermSet) where {T1<:Real}
+function (*)(a::T1, t::TermSet) where {T1 <: Real}
     return TermSet((a * ti for ti in t)...)
 end
 
@@ -117,50 +117,50 @@ displacement(t::Term) = displacement(t.A)
 
 #importing properties from ProximalOperators
 import ProximalCore:
-	is_affine_indicator,
-	is_cone_indicator,
-	is_convex,
-	is_generalized_quadratic,
-	is_proximable,
-	is_quadratic,
-	is_separable,
-	is_set_indicator,
-	is_singleton_indicator,
-	is_smooth,
-	is_locally_smooth,
-	is_strongly_convex
+    is_affine_indicator,
+    is_cone_indicator,
+    is_convex,
+    is_generalized_quadratic,
+    is_proximable,
+    is_quadratic,
+    is_separable,
+    is_set_indicator,
+    is_singleton_indicator,
+    is_smooth,
+    is_locally_smooth,
+    is_strongly_convex
 
 is_func_f = [:is_set_indicator, :is_singleton_indicator, :is_smooth, :is_locally_smooth]
 
 for f in is_func_f
-	@eval begin
-		import ProximalCore: $f
-		$f(t::Term) = $f(t.f)
-		$f(t::TermSet) = all($f.(t.terms))
-	end
+    @eval begin
+        import ProximalCore: $f
+        $f(t::Term) = $f(t.f)
+        $f(t::TermSet) = all($f.(t.terms))
+    end
 end
 
 #importing properties from AbstractOperators
 is_op_f = [
-	:is_linear,
-	:is_eye,
-	:is_null,
-	:is_diagonal,
-	:is_AcA_diagonal,
-	:is_AAc_diagonal,
-	:is_orthogonal,
-	:is_invertible,
-	:is_full_row_rank,
-	:is_full_column_rank,
-	:is_sliced,
+    :is_linear,
+    :is_eye,
+    :is_null,
+    :is_diagonal,
+    :is_AcA_diagonal,
+    :is_AAc_diagonal,
+    :is_orthogonal,
+    :is_invertible,
+    :is_full_row_rank,
+    :is_full_column_rank,
+    :is_sliced,
 ]
 
 for f in is_op_f
-	@eval begin
-		import AbstractOperators: $f
-		$f(t::Term) = $f(operator(t))
-		$f(t::TermSet) = all($f.(t))
-	end
+    @eval begin
+        import AbstractOperators: $f
+        $f(t::Term) = $f(operator(t))
+        $f(t::TermSet) = all($f.(t))
+    end
 end
 
 is_affine_indicator(t::Term) = is_affine_indicator(t.f) && is_linear(t)
@@ -175,5 +175,5 @@ include("proximalOperators_bind.jl")
 
 # other stuff, to make Term work with iterators
 import Base: iterate, isempty
-iterate(t::Term, state=true) = state ? (t, false) : nothing
+iterate(t::Term, state = true) = state ? (t, false) : nothing
 isempty(t::Term) = false

@@ -26,7 +26,7 @@ squared norm of `L * x`, but rather the squared norm of `Lᴴ * L * x` (i.e. the
 squared norm of the gradient). Most algorithms, however, tolerate this
 difference, and it is much faster to compute.
 """
-struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator,L2<:AbstractOperator}
+struct SqrNormL2WithNormalOp{T, SC, L <: AbstractOperator, L2 <: AbstractOperator}
     A::L
     # Normal operator used for the gradient. For scalar λ it is AᴴA (the weight is
     # applied afterwards); for array λ it is the *weighted* normal operator
@@ -48,7 +48,7 @@ struct SqrNormL2WithNormalOp{T,SC,L<:AbstractOperator,L2<:AbstractOperator}
         else
             AᴴA = A' * A
         end
-        return new{typeof(lambda),strongly_convex,typeof(A),typeof(AᴴA)}(A, AᴴA, lambda)
+        return new{typeof(lambda), strongly_convex, typeof(A), typeof(AᴴA)}(A, AᴴA, lambda)
     end
 end
 
@@ -56,7 +56,7 @@ is_convex(::Type{<:SqrNormL2WithNormalOp}) = true
 is_smooth(::Type{<:SqrNormL2WithNormalOp}) = true
 is_separable(::Type{<:SqrNormL2WithNormalOp}) = true
 is_generalized_quadratic(::Type{<:SqrNormL2WithNormalOp}) = true
-is_strongly_convex(::Type{<:SqrNormL2WithNormalOp{T,SC}}) where {T,SC} = SC
+is_strongly_convex(::Type{<:SqrNormL2WithNormalOp{T, SC}}) where {T, SC} = SC
 
 SqrNormL2WithNormalOp(A) = SqrNormL2WithNormalOp(A, 1)
 

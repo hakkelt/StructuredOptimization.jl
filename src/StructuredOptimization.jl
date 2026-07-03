@@ -15,7 +15,7 @@ include("syntax/variable.jl")
 include("syntax/expressions/expression.jl")
 include("syntax/terms/term.jl")
 
-const TermOrExpr =  Union{Term,AbstractExpression}
+const TermOrExpr = Union{Term, AbstractExpression}
 
 include("calculus/precomposeNonlinear.jl") # TODO move to ProximalOperators?
 include("calculus/sqrNormL2WithNormalOp.jl")
@@ -40,12 +40,12 @@ include("solvers/minimize.jl")
 # piracy. ProximalAlgorithms' own `value_and_gradient(::AutoDifferentiable/::Zero, x)`
 # methods are more specific, so they still take precedence for those types.
 ProximalAlgorithms.value_and_gradient(f, x) = begin
-  y, fy = gradient(f, x)
-  return fy, y
+    y, fy = gradient(f, x)
+    return fy, y
 end
 ProximalAlgorithms.value_and_gradient!(grad_f_x, f, x) = begin
-  fy = gradient!(grad_f_x, f, x)
-  return fy
+    fy = gradient!(grad_f_x, f, x)
+    return fy
 end
 
 end

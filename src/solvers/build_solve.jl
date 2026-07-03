@@ -44,7 +44,7 @@ function match_assumption(assumption, remaining_terms, variables)
     return nothing
 end
 
-function parse_problem(terms::Union{Term,TermSet}, algorithm::T, return_partial::Bool = false) where {T <: IterativeAlgorithm}
+function parse_problem(terms::Union{Term, TermSet}, algorithm::T, return_partial::Bool = false) where {T <: IterativeAlgorithm}
     terms = terms isa TermSet ? terms : TermSet(terms)
     assumptions = ProximalAlgorithms.get_assumptions(algorithm)
     variables = extract_variables(terms)
@@ -67,7 +67,7 @@ function parse_problem(terms::Union{Term,TermSet}, algorithm::T, return_partial:
     return return_partial ? (kwargs, remaining_terms) : nothing
 end
 
-function print_diagnostics(terms::Union{Term,TermSet}, algorithm::T) where {T <: IterativeAlgorithm}
+function print_diagnostics(terms::Union{Term, TermSet}, algorithm::T) where {T <: IterativeAlgorithm}
     terms = terms isa TermSet ? terms : TermSet(terms)
     kwargs, remaining_terms = parse_problem(terms, algorithm, true)
     print("The algorithm $(typeof(algorithm).name.name) assumes problem of form: ")
@@ -92,6 +92,7 @@ function print_diagnostics(terms::Union{Term,TermSet}, algorithm::T) where {T <:
             println(" - $term (unsatisfied: $(join(reasons, "; ")))")
         end
     end
+    return
 end
 
 # Function-side predicate list of an assumption, or `nothing` if it has none
@@ -114,7 +115,7 @@ function unsatisfied_reasons(term, assumptions)
     return reasons
 end
 
-function parse_problem(terms::Union{Term,TermSet})
+function parse_problem(terms::Union{Term, TermSet})
     terms = terms isa TermSet ? terms : TermSet(terms)
     for algorithm in ProximalAlgorithms.get_algorithms()
         result = parse_problem(terms, algorithm)
@@ -125,7 +126,7 @@ function parse_problem(terms::Union{Term,TermSet})
     return nothing
 end
 
-function suggest_algorithm(terms::Union{Term,TermSet}, algorithms = ProximalAlgorithms.get_algorithms())
+function suggest_algorithm(terms::Union{Term, TermSet}, algorithms = ProximalAlgorithms.get_algorithms())
     terms = terms isa TermSet ? terms : TermSet(terms)
     suitable_algs = []
     for algorithm in algorithms
@@ -137,7 +138,7 @@ function suggest_algorithm(terms::Union{Term,TermSet}, algorithms = ProximalAlgo
     return suitable_algs
 end
 
-function print_diagnostics(terms::Union{Term,TermSet})
+function print_diagnostics(terms::Union{Term, TermSet})
     terms = terms isa TermSet ? terms : TermSet(terms)
     best_algorithm, best_algorithm_remaining_terms = nothing, Inf
     for algorithm in ProximalAlgorithms.get_algorithms()
@@ -147,8 +148,8 @@ function print_diagnostics(terms::Union{Term,TermSet})
             best_algorithm = algorithm
         end
     end
-	println("The closest algorithm to the problem is $best_algorithm")
-    print_diagnostics(terms, best_algorithm)
+    println("The closest algorithm to the problem is $best_algorithm")
+    return print_diagnostics(terms, best_algorithm)
 end
 
 export solve
@@ -187,7 +188,7 @@ function _run_solver(solver, term_kwargs, x; kwargs...)
     return x, it
 end
 
-function solve(terms::Union{Term,TermSet}, solvers::Union{<:AbstractVector{<:IterativeAlgorithm},<:Tuple{Vararg{IterativeAlgorithm}}}; kwargs...)
+function solve(terms::Union{Term, TermSet}, solvers::Union{<:AbstractVector{<:IterativeAlgorithm}, <:Tuple{Vararg{IterativeAlgorithm}}}; kwargs...)
     terms = terms isa TermSet ? terms : TermSet(terms)
     for solver in solvers
         result = parse_problem(terms, solver)
@@ -197,7 +198,7 @@ function solve(terms::Union{Term,TermSet}, solvers::Union{<:AbstractVector{<:Ite
         _, term_kwargs, x = result
         return _run_solver(solver, term_kwargs, x; kwargs...)
     end
-    if length(solvers) == 1
+    return if length(solvers) == 1
         print_diagnostics(terms, solvers[1])
         error("Sorry, I cannot parse this problem for solver of type $(typeof(solvers[1]).parameters[1])")
     else
@@ -206,24 +207,24 @@ function solve(terms::Union{Term,TermSet}, solvers::Union{<:AbstractVector{<:Ite
     end
 end
 
-function solve(terms::Union{Term,TermSet}, solver::IterativeAlgorithm; kwargs...)
+function solve(terms::Union{Term, TermSet}, solver::IterativeAlgorithm; kwargs...)
     terms = terms isa TermSet ? terms : TermSet(terms)
-	result = parse_problem(terms, solver)
-	if result === nothing
-		print_diagnostics(terms, solver)
-		error("Sorry, I cannot parse this problem for solver of type $(typeof(solver).parameters[1])")
-	end
-	_, term_kwargs, x = result
+    result = parse_problem(terms, solver)
+    if result === nothing
+        print_diagnostics(terms, solver)
+        error("Sorry, I cannot parse this problem for solver of type $(typeof(solver).parameters[1])")
+    end
+    _, term_kwargs, x = result
     return _run_solver(solver, term_kwargs, x; kwargs...)
 end
 
-function solve(terms::Union{Term,TermSet}; kwargs...)
+function solve(terms::Union{Term, TermSet}; kwargs...)
     terms = terms isa TermSet ? terms : TermSet(terms)
-	result = parse_problem(terms)
-	if result === nothing
-		print_diagnostics(terms)
-		error("Sorry, I cannot find a suitable solver for this problem")
-	end
-	solver, term_kwargs, x = result
+    result = parse_problem(terms)
+    if result === nothing
+        print_diagnostics(terms)
+        error("Sorry, I cannot find a suitable solver for this problem")
+    end
+    solver, term_kwargs, x = result
     return _run_solver(solver, term_kwargs, x; kwargs...)
 end

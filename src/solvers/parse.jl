@@ -4,7 +4,7 @@ function add_to_incompatibilities(incompatibilities, t1, t2)
     else
         incompatibilities[t1] = Set([t2])
     end
-    if haskey(incompatibilities, t2)
+    return if haskey(incompatibilities, t2)
         push!(incompatibilities[t2], t1)
     else
         incompatibilities[t2] = Set([t1])
@@ -34,7 +34,7 @@ function can_be_separable_sum(variable_bags)
             for i in eachindex(operators)
                 if is_sliced(operators[i])
                     # This operator is sliced, check if it is overlapping with any other sliced operator
-                    for j in i+1:length(operators)
+                    for j in (i + 1):length(operators)
                         if is_sliced(operators[j]) && any(slicing_masks[i] .&& slicing_masks[j])
                             return false
                         end
@@ -58,13 +58,13 @@ function get_unseparable_pairs(variable_bags)
             for i in eachindex(operators)
                 if is_sliced(operators[i])
                     # This operator is sliced, check if it is overlapping with any other sliced operator
-                    for j in i+1:length(operators)
+                    for j in (i + 1):length(operators)
                         if is_sliced(operators[j]) && any(slicing_masks[i] .&& slicing_masks[j])
                             add_to_incompatibilities(incompatibilities, term_list[i], term_list[j])
                         end
                     end
                 else # no slicing -> this term is incompatible with all others
-                    for j in i+1:length(operators)
+                    for j in (i + 1):length(operators)
                         add_to_incompatibilities(incompatibilities, term_list[i], term_list[j])
                     end
                 end
@@ -104,7 +104,7 @@ end
 unsatisfied_properties(term, assumptions::ProximalAlgorithms.AssumptionItem) = [property_func for property_func in assumptions.second if !property_func(term)]
 does_satisfy(term, assumptions::ProximalAlgorithms.AssumptionItem) = all(property_func(term) for property_func in assumptions.second)
 
-function prepare(term::Term, assumption::ProximalAlgorithms.SimpleTerm, variables::NTuple{N, Variable}) where N
+function prepare(term::Term, assumption::ProximalAlgorithms.SimpleTerm, variables::NTuple{N, Variable}) where {N}
     if does_satisfy(term, assumption.func) && (!(ProximalCore.is_proximable in assumption.func.second) || is_AAc_diagonal(affine(term)))
         op = extract_operators(variables, term)
         disp = displacement(term)
@@ -114,10 +114,10 @@ function prepare(term::Term, assumption::ProximalAlgorithms.SimpleTerm, variable
     end
 end
 
-function print_diagnostics(term::Term, assumption::ProximalAlgorithms.SimpleTerm, ::NTuple{N, Variable}) where N
+function print_diagnostics(term::Term, assumption::ProximalAlgorithms.SimpleTerm, ::NTuple{N, Variable}) where {N}
     repr = term.repr !== nothing ? term.repr : string(term)
     problematic_properties = unsatisfied_properties(term, assumption.func)
-    if length(problematic_properties) == 0
+    return if length(problematic_properties) == 0
         println("Term $repr satisfies all required properties, but the following operator is not AAc diagonal: ", affine(term))
     else
         println("Term $repr does not satisfy required property: $(join(problematic_properties, ", "))")
@@ -132,10 +132,10 @@ function prepare_proximable_single_var_per_term(variable_bags, variables::NTuple
             if length(term_list) > 1
                 #multiple terms per variable
                 #currently this happens only with GetIndex
-                fxi,idxs = (),()
+                fxi, idxs = (), ()
                 for ti in term_list
                     op = operator(ti)
-                    fxi  = (fxi..., merge_function_with_operator(op, ti.f, displacement(ti), ti.lambda))
+                    fxi = (fxi..., merge_function_with_operator(op, ti.f, displacement(ti), ti.lambda))
                     if AbstractOperators.ndoms(op, 2) > 1
                         op = op[findfirst(==(var), variables(ti))]
                     end
@@ -146,7 +146,7 @@ function prepare_proximable_single_var_per_term(variable_bags, variables::NTuple
                     end
                     idxs = (idxs..., AbstractOperators.get_slicing_mask(op))
                 end
-                fs = (fs..., SlicedSeparableSum(fxi,idxs))
+                fs = (fs..., SlicedSeparableSum(fxi, idxs))
             else
                 op = operator(term_list[1])
                 disp = displacement(term_list[1])
@@ -210,7 +210,7 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Simple
         return
     end
     problematic_term_index = findfirst(term -> !does_satisfy(term, assumption.func), terms)
-    if problematic_term_index !== nothing
+    return if problematic_term_index !== nothing
         problematic_term = terms[problematic_term_index]
         repr = problematic_term.repr !== nothing ? problematic_term.repr : string(problematic_term)
         problematic_properties = unsatisfied_properties(problematic_term, assumption.func)
@@ -233,12 +233,12 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Simple
     end
 end
 
-function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTerm, variables::NTuple{N, Variable}) where N
+function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTerm, variables::NTuple{N, Variable}) where {N}
     op = extract_affines(variables, term)
     if does_satisfy(op, assumption.operator) && does_satisfy(term.f, assumption.func)
         return (
             assumption.func.first => term.lambda == 1 ? term.f : Postcompose(term.f, term.lambda),
-            assumption.operator.first => op
+            assumption.operator.first => op,
         )
     else # try preparing as a simple term
         tup = prepare(term, ProximalAlgorithms.SimpleTerm(assumption.func), variables)
@@ -250,7 +250,7 @@ function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTerm, variab
     end
 end
 
-function print_diagnostics(term::Term, assumption::ProximalAlgorithms.OperatorTerm, variables::NTuple{N, Variable}) where N
+function print_diagnostics(term::Term, assumption::ProximalAlgorithms.OperatorTerm, variables::NTuple{N, Variable}) where {N}
     op = affine(term)
     repr = term.repr !== nothing ? term.repr : string(term)
     if is_eye(op)
@@ -275,7 +275,7 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.OperatorTe
         end
     end
     println("When trying to prepare the term as a simple term:")
-    print_diagnostics(term, ProximalAlgorithms.SimpleTerm(assumption.func), variables)
+    return print_diagnostics(term, ProximalAlgorithms.SimpleTerm(assumption.func), variables)
 end
 
 function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTerm, variables::NTuple{N, Variable}) where {N}
@@ -288,7 +288,7 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTerm, va
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func)
         return (
             assumption.func.first => f,
-            assumption.operator.first => op
+            assumption.operator.first => op,
         )
     else # try preparing as a simple term
         return prepare(terms, ProximalAlgorithms.SimpleTerm(assumption.func), variables)
@@ -322,7 +322,7 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Operat
         end
     end
     println("When trying to prepare terms as a simple function:")
-    print_diagnostics(terms, ProximalAlgorithms.SimpleTerm(assumption.func), variables)
+    return print_diagnostics(terms, ProximalAlgorithms.SimpleTerm(assumption.func), variables)
 end
 
 function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTermWithInfimalConvolution, variables::NTuple{N, Variable}) where {N}
@@ -332,12 +332,12 @@ function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTermWithInfi
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₁)
         return (
             assumption.func₁.first => f,
-            assumption.operator.first => op
+            assumption.operator.first => op,
         )
     elseif does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₂)
         return (
             assumption.func₂.first => f,
-            assumption.operator.first => op
+            assumption.operator.first => op,
         )
     else
         # try preparing as a simple term
@@ -375,7 +375,7 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.OperatorTe
         end
     end
     println("When trying to prepare the term as a simple term:")
-    print_diagnostics(term, ProximalAlgorithms.SimpleTerm(assumption.func₁), variables)
+    return print_diagnostics(term, ProximalAlgorithms.SimpleTerm(assumption.func₁), variables)
 end
 
 function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTermWithInfimalConvolution, variables::NTuple{N, Variable}) where {N}
@@ -388,12 +388,12 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTermWith
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₁)
         return (
             assumption.func₁.first => f,
-            assumption.operator.first => op
+            assumption.operator.first => op,
         )
     elseif does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₂)
         return (
             assumption.func₂.first => f,
-            assumption.operator.first => op
+            assumption.operator.first => op,
         )
     else
         # try preparing as a simple term
@@ -448,10 +448,10 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Operat
         end
     end
     println("When trying to prepare the term as a simple term:")
-    print_diagnostics(terms, ProximalAlgorithms.SimpleTerm(assumption.func₁), variables)
+    return print_diagnostics(terms, ProximalAlgorithms.SimpleTerm(assumption.func₁), variables)
 end
 
-function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where N
+function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where {N}
     f = term.f
     # The CG-family objective is ‖A x - b‖² but StructuredOptimization stores the
     # displacement `d` of `A x + d`, so the least-squares target is b = -d.
@@ -492,12 +492,12 @@ function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, va
     )
 end
 
-function print_diagnostics(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where N
+function print_diagnostics(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where {N}
     op = extract_operators(variables, term)
     b = -displacement(term)
     f = term.f
     repr = term.repr !== nothing ? term.repr : string(term)
-    if !(f isa ProximalOperators.LeastSquares || f isa ProximalOperators.SqrNormL2)
+    return if !(f isa ProximalOperators.LeastSquares || f isa ProximalOperators.SqrNormL2)
         println("Term $repr does not satisfy required property: it is not a least squares function")
     else
         println("A possible decomposition of term $repr:")
@@ -516,14 +516,14 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.LeastSquaresTerm
 end
 
 function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where {N}
-    if length(terms) == 1
+    return if length(terms) == 1
         print_diagnostics(terms[1], assumption, variables)
     else
         println("Cannot prepare terms $terms as a least squares term: only a single term can be prepared as such.")
     end
 end
 
-function prepare(term::Term, assumption::ProximalAlgorithms.SquaredL2Term, variables::NTuple{N, Variable}) where N
+function prepare(term::Term, assumption::ProximalAlgorithms.SquaredL2Term, variables::NTuple{N, Variable}) where {N}
     f = term.f
     if displacement(term) != 0 || !(f isa ProximalOperators.SqrNormL2)
         return nothing
@@ -539,9 +539,9 @@ function prepare(term::Term, assumption::ProximalAlgorithms.SquaredL2Term, varia
     end
 end
 
-function print_diagnostics(term::Term, ::ProximalAlgorithms.SquaredL2Term, variables::NTuple{N, Variable}) where N
+function print_diagnostics(term::Term, ::ProximalAlgorithms.SquaredL2Term, variables::NTuple{N, Variable}) where {N}
     repr = term.repr !== nothing ? term.repr : string(term)
-    if displacement(term) != 0
+    return if displacement(term) != 0
         println("Term $repr does not satisfy required property: it has non-zero displacement")
     elseif !(term.f isa ProximalOperators.SqrNormL2)
         println("Term $repr does not satisfy required property: it is not a squared L2 function")
@@ -558,21 +558,21 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.SquaredL2Term, v
 end
 
 function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.SquaredL2Term, variables::NTuple{N, Variable}) where {N}
-    if length(terms) == 1
+    return if length(terms) == 1
         print_diagnostics(terms[1], assumption, variables)
     else
         println("Cannot prepare terms $terms as a squared L2 term: only a single term can be prepared as such.")
     end
 end
 
-function prepare(term::Term, assumption::ProximalAlgorithms.RepeatedSimpleTerm, variables::NTuple{N, Variable}) where N
+function prepare(term::Term, assumption::ProximalAlgorithms.RepeatedSimpleTerm, variables::NTuple{N, Variable}) where {N}
     simple_assumption = ProximalAlgorithms.SimpleTerm(assumption.func)
     return prepare(term, simple_assumption, variables)
 end
 
-function print_diagnostics(term::Term, assumption::ProximalAlgorithms.RepeatedSimpleTerm, variables::NTuple{N, Variable}) where N
+function print_diagnostics(term::Term, assumption::ProximalAlgorithms.RepeatedSimpleTerm, variables::NTuple{N, Variable}) where {N}
     simple_assumption = ProximalAlgorithms.SimpleTerm(assumption.func)
-    print_diagnostics(term, simple_assumption, variables)
+    return print_diagnostics(term, simple_assumption, variables)
 end
 
 function prepare(terms::TermSet, assumption::ProximalAlgorithms.RepeatedSimpleTerm, variables::NTuple{N, Variable}) where {N}
@@ -595,16 +595,17 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Repeat
             print_diagnostics(term, simple_assumption, variables)
         end
     end
+    return
 end
 
-function prepare(term::Term, assumption::ProximalAlgorithms.RepeatedOperatorTerm, variables::NTuple{N, Variable}) where N
+function prepare(term::Term, assumption::ProximalAlgorithms.RepeatedOperatorTerm, variables::NTuple{N, Variable}) where {N}
     operator_term_assumption = ProximalAlgorithms.OperatorTerm(assumption.func, assumption.operator)
     return prepare(term, operator_term_assumption, variables)
 end
 
-function print_diagnostics(term::Term, assumption::ProximalAlgorithms.RepeatedOperatorTerm, variables::NTuple{N, Variable}) where N
+function print_diagnostics(term::Term, assumption::ProximalAlgorithms.RepeatedOperatorTerm, variables::NTuple{N, Variable}) where {N}
     operator_term_assumption = ProximalAlgorithms.OperatorTerm(assumption.func, assumption.operator)
-    print_diagnostics(term, operator_term_assumption, variables)
+    return print_diagnostics(term, operator_term_assumption, variables)
 end
 
 function prepare(terms::TermSet, assumption::ProximalAlgorithms.RepeatedOperatorTerm, variables::NTuple{N, Variable}) where {N}
@@ -621,7 +622,7 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.RepeatedOperator
     end
     return (
         assumption.func.first => function_results,
-        assumption.operator.first => operator_results
+        assumption.operator.first => operator_results,
     )
 end
 
@@ -632,4 +633,5 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Repeat
             print_diagnostics(term, operator_term_assumption, variables)
         end
     end
+    return
 end
