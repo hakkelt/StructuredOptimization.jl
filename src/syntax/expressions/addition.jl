@@ -183,7 +183,10 @@ end
 
 function (-)(a::Union{AbstractArray, Number}, b::AbstractExpression)
     B = convert(Expression, b)
-    return Expression(B.x, -AffineAdd(affine(B), a))
+    # a - b(x) = -b(x) + a: negate the operator (displacement included) and add `a`
+    # once. The previous `-AffineAdd(affine(B), a)` was `-(b(x) + a)`, which wrongly
+    # flipped the sign of the added constant `a`.
+    return Expression(B.x, AffineAdd(-affine(B), a))
 end
 # sum with array/scalar
 

@@ -39,6 +39,10 @@ Random.seed!(0)
 		include("test_phase2_matching.jl")
 	end
 
+	@testset "Phase 4 coverage" begin
+		include("test_phase4_coverage.jl")
+	end
+
 	@testset "End-to-end tests" begin
 		include("test_usage_small.jl")
 		include("test_usage.jl")

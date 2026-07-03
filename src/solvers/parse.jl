@@ -209,7 +209,9 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Simple
         print_diagnostics(terms[1], assumption, variables)
         return
     end
-    problematic_term_index = findfirst(term -> !does_satisfy(term, assumption.func), terms)
+    # `TermSet` supports iteration and integer indexing but not `findfirst` directly,
+    # so search the collected vector; its order matches `terms[i]`.
+    problematic_term_index = findfirst(term -> !does_satisfy(term, assumption.func), collect(terms))
     return if problematic_term_index !== nothing
         problematic_term = terms[problematic_term_index]
         repr = problematic_term.repr !== nothing ? problematic_term.repr : string(problematic_term)
@@ -504,7 +506,7 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.LeastSquar
         print(" - ", assumption.operator.first, " = ", op)
         problematic_properties = unsatisfied_properties(op, assumption.operator)
         println(" -> $(join(problematic_properties, ", ")) $(length(problematic_properties) == 1 ? "property is" : "properties are") not satisfied")
-        print(" - ", assumption.b.first, " = ", b)
+        print(" - ", assumption.b, " = ", b)
     end
 end
 
