@@ -3,7 +3,11 @@ struct Expression{N,A<:AbstractOperator} <: AbstractExpression
   L::A
   function Expression(x::NTuple{N,Variable}, L::A) where {N,A<:AbstractOperator}
     # checks on L
-    ndoms(L,1) > 1 && throw(ArgumentError(
+    # A multi-domain codomain is normally unsupported (most Term machinery
+    # assumes a single-block codomain array), but an `is_eye` operator is a
+    # provable no-op — x flows through unchanged — so a block-identity like
+    # DCAT(Eye, Eye) over a joint multi-variable domain is safe to allow.
+    ndoms(L,1) > 1 && !is_eye(L) && throw(ArgumentError(
       "Cannot create expression with LinearOperator with `ndoms(L,1) > 1`"
      ))
     #checks on x

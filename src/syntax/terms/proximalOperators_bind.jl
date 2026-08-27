@@ -89,10 +89,16 @@ This is much faster to compute, if `Lᴴ * L` has a fast implementation.
 
 normalop_ls(::Variable) = error("normalop_ls does not work with Variables alone. Use ls instead.")
 function normalop_ls(ex::Expression)
+    # eye_op must be the identity on the *joint* domain of ex.x, so that the
+    # Term's smooth function sees the original variables unchanged and
+    # SqrNormL2WithNormalOp's AᴴA = ex.Lᴴ*ex.L (which lives on that same
+    # joint domain) receives the right input. `Eye(ArrayPartition(...))`
+    # builds exactly that as a block-identity `DCAT` — allowed as an
+    # Expression codomain despite `ndoms > 1` because it `is_eye`.
     eye_op = if length(ex.x) == 1
         Eye(domain_type(ex.L), size(ex.L, 2))
     else
-        HCAT([Eye(domain_type(L), size(L, 2)) for L in ex.L]...)
+        Eye(ArrayPartition((~xi for xi in ex.x)...))
     end
     return Term(SqrNormL2WithNormalOp(ex.L), Expression(ex.x, eye_op))
 end
