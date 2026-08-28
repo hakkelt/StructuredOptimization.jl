@@ -32,11 +32,13 @@ Random.seed!(0)
 		include("test_usage.jl")
 	end
 
+
 	@testset "Aqua" begin
-		Aqua.test_all(StructuredOptimization; ambiguities=false, piracies=false)
+		Aqua.test_all(StructuredOptimization; ambiguities=false, piracies=false, persistent_tasks=false)
 		Aqua.test_ambiguities(
 			StructuredOptimization; exclude=[Base.:(+), Base.:<=, Base.:>=], broken=true
 		)
+		Aqua.test_persistent_tasks(StructuredOptimization)
 		Aqua.test_piracies(
 			StructuredOptimization;
 			treat_as_own=[

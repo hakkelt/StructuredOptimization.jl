@@ -39,6 +39,9 @@ function parse_problem(terms::Union{Term,TermSet}, algorithm::T, return_partial:
             end
         end
         if isempty(remaining_terms)
+            if return_partial
+                return (kwargs, remaining_terms)
+            end
             return algorithm, kwargs, variables
         end
     end

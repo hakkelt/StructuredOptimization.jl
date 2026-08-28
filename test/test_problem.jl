@@ -105,3 +105,30 @@ V = StructuredOptimization.extract_operators(xAll,cf)
 @test typeof(V[6][3]) <: Zeros
 @test typeof(V[6][4]) <: Zeros
 @test typeof(V[6][5]) <: Eye
+
+# minimize.jl — error in problem()
+@test_throws ErrorException problem(42)
+
+# parse.jl — diagonal operator with SqrNormL2 and other functions
+let n = 4
+    d = abs.(randn(n)) .+ 0.1   # positive diagonal
+    x = Variable(n)
+    ~x .= 0.0
+
+    t_sq = ls(d.*x)
+    prob_sq = problem(t_sq)
+    algs = StructuredOptimization.suggest_algorithm(prob_sq)
+    @test !isempty(algs)
+    sol_sq = solve(prob_sq, ProximalAlgorithms.PANOCplus(tol=1e-6))
+    @test !isnothing(sol_sq)
+
+    x2 = Variable(n)
+    ~x2 .= 0.0
+    t_n1 = norm(d.*x2, 1)
+    t_smooth = ls(x2)
+    prob_n1 = problem(t_n1 + t_smooth)
+    algs_n1 = StructuredOptimization.suggest_algorithm(prob_n1)
+    @test !isempty(algs_n1)
+    sol_n1 = solve(prob_n1, ProximalAlgorithms.PANOCplus(tol=1e-6))
+    @test !isnothing(sol_n1)
+end

@@ -1,10 +1,17 @@
+_scalar_codomain_type(T::Type) = T
+_scalar_codomain_type(t::Tuple) = _scalar_codomain_type(t[1])
+
 struct Term{T1<:Real,T2,T3<:AbstractExpression}
 	lambda::T1
 	f::T2
 	A::T3
 	repr::Union{String,Nothing}
 	function Term(lambda::T1, f::T2, A::T3, repr::Union{String,Nothing}) where {T1<:Real,T2,T3<:AbstractExpression}
-		T1_ = real(codomain_type(affine(A)))
+		# codomain_type is a (possibly nested) Tuple of types for a multi-domain
+		# codomain (e.g. the block-identity DCAT built by multi-variable
+		# normalop_ls); such an operator is only ever allowed as an Expression
+		# when `is_eye`, so every block shares one type — take it directly.
+		T1_ = real(_scalar_codomain_type(codomain_type(affine(A))))
 		lambda = convert(T1_, lambda)
 		return new{T1_,T2,T3}(lambda, f, A, repr)
 	end

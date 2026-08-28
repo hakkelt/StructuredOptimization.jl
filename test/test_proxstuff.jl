@@ -44,3 +44,23 @@ grad_f_x2 = jacobian(G,x)'*grad_f_x2
 
 @test norm(f_x-f_x2) < 1e-8
 @test norm(grad_f_x2.-grad_f_x2) < 1e-8
+
+## SqrNormL2WithNormalOp
+L_mat = randn(8, 5)
+L = MatrixOp(L_mat)
+xv = randn(5)
+f_nop = StructuredOptimization.SqrNormL2WithNormalOp(L)
+@test abs(f_nop(xv) - 0.5 * norm(L_mat * xv)^2) < 1e-10
+yv = zero(xv)
+fy = gradient!(yv, f_nop, xv)
+@test norm(yv - L_mat' * (L_mat * xv)) < 1e-10
+@test StructuredOptimization.is_convex(typeof(f_nop))
+@test StructuredOptimization.is_smooth(typeof(f_nop))
+@test StructuredOptimization.is_generalized_quadratic(typeof(f_nop))
+
+# sqrNormL2WithNormalOp.jl — negative lambda error
+let A = randn(5, 4)
+    op = MatrixOp(A)
+    @test_throws ErrorException StructuredOptimization.SqrNormL2WithNormalOp(op, -1.0)
+end
+
