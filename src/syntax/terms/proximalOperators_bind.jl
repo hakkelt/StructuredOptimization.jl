@@ -81,18 +81,25 @@ f (\\mathbf{L} * \\mathbf{x}) = \\frac{1}{2} \\| \\mathbf{L} * \\mathbf{x} \\|^2
 ```
 (shorthand of `1/2*norm(x)^2`).
 
-The only difference with `ls` comes when gradient! is called. In this case, the
-gradient is computed as usual, but the squared norm of the gradient (i.e. the
-squared norm of `Lᴴ * L * x`) is returned instead of the squared norm of `L * x`.
-This is much faster to compute, if `Lᴴ * L` has a fast implementation.
+The only difference with `ls` comes when gradient! is called: the gradient is evaluated
+through the normal operator `Lᴴ * L` in a single pass, which is much faster if `Lᴴ * L`
+has an optimized implementation. The returned function value is the same one `ls` would
+return — it is recovered from the gradient with two inner products, without a second
+application of `L` (see `SqrNormL2WithNormalOp`).
 """
 
 normalop_ls(::Variable) = error("normalop_ls does not work with Variables alone. Use ls instead.")
 function normalop_ls(ex::Expression)
+    # eye_op must be the identity on the *joint* domain of ex.x, so that the
+    # Term's smooth function sees the original variables unchanged and
+    # SqrNormL2WithNormalOp's AᴴA = ex.Lᴴ*ex.L (which lives on that same
+    # joint domain) receives the right input. `Eye(ArrayPartition(...))`
+    # builds exactly that as a block-identity `DCAT` — allowed as an
+    # Expression codomain despite `ndoms > 1` because it `is_eye`.
     eye_op = if length(ex.x) == 1
         Eye(domain_type(ex.L), size(ex.L, 2))
     else
-        HCAT([Eye(domain_type(L), size(L, 2)) for L in ex.L]...)
+        Eye(ArrayPartition((~xi for xi in ex.x)...))
     end
     return Term(SqrNormL2WithNormalOp(ex.L), Expression(ex.x, eye_op))
 end

@@ -30,7 +30,7 @@ function can_be_separable_sum(variable_bags)
         if length(term_list) > 1 # more than one term for this variable
             # Check if any of the terms are sliced
             operators = [get_operators_for_var(term, var) for term in term_list]
-            slicing_masks = [is_sliced(op) ? get_slicing_mask(op) : nothing for op in operators]
+            slicing_masks = [is_sliced(op) ? AbstractOperators.get_slicing_mask(op) : nothing for op in operators]
             for i in eachindex(operators)
                 if is_sliced(operators[i])
                     # This operator is sliced, check if it is overlapping with any other sliced operator
@@ -54,7 +54,7 @@ function get_unseparable_pairs(variable_bags)
         if length(term_list) > 1 # more than one term for this variable
             # Check if any of the terms are sliced
             operators = [get_operators_for_var(term, var) for term in term_list]
-            slicing_masks = [is_sliced(op) ? get_slicing_mask(op) : nothing for op in operators]
+            slicing_masks = [is_sliced(op) ? AbstractOperators.get_slicing_mask(op) : nothing for op in operators]
             for i in eachindex(operators)
                 if is_sliced(operators[i])
                     # This operator is sliced, check if it is overlapping with any other sliced operator
@@ -144,7 +144,7 @@ function prepare_proximable_single_var_per_term(variable_bags, variables::NTuple
                     else
                         idx = op.idx
                     end
-                    idxs = (idxs..., get_slicing_mask(op))
+                    idxs = (idxs..., AbstractOperators.get_slicing_mask(op))
                 end
                 fs = (fs..., SlicedSeparableSum(fxi,idxs))
             else
@@ -179,10 +179,10 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.SimpleTerm, vari
             return (assumption.func.first => prepare_proximable_single_var_per_term(variable_bags, variables),)
         else
             op = extract_operators(variables, terms)
-            idxs = get_slicing_expr(op)
+            idxs = AbstractOperators.get_slicing_expr(op)
             op = remove_slicing(op)
-            hcat_ops = tuple([op[i] for i in eachindex(op.A)]...)
-            μs = AbstractOperators.diag_AAc(op)
+            hcat_ops = op.A
+            μs = Tuple(AbstractOperators.diag_AAc(op_i) for op_i in op.A)
             f = extract_functions(terms)
             return (assumption.func.first => PrecomposedSlicedSeparableSum(f.fs, idxs, hcat_ops, μs),)
         end
@@ -453,15 +453,23 @@ function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, va
     if !f_is_ls
         return nothing
     end
+    # The term is `‖L*x + d‖²` (e.g. `ls(A*x - y)` has displacement `d = -y`), while the assumption
+    # expects the least-squares term in the form `‖L*x - b‖²`, hence the negated displacement.
+    AHA = nothing
     if f isa SqrNormL2WithNormalOp
         lambda = term.lambda * f.lambda
         op = term.f.A
-        b = displacement(op)
+        b = -displacement(op)
         op = remove_displacement(op)
+        # `f` already holds `AᴴA` (built eagerly in its constructor). Hand it to algorithms
+        # that ask for it — otherwise ADMM builds a second, independent `Compose` chain with
+        # its own operator-sized buffers. Only when `lambda == 1`: a different `lambda`
+        # rescales `op` below, and the cached `AᴴA` would no longer match it.
+        AHA = remove_displacement(f.AᴴA)
     else
         lambda = term.lambda
         op = extract_operators(variables, term)
-        b = displacement(term)
+        b = -displacement(term)
     end
     if !does_satisfy(op, assumption.operator)
         return nothing
@@ -469,11 +477,16 @@ function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, va
     if lambda != 1
         op = lambda * op
         b = lambda * b
+        AHA = nothing
     end
-    return (
+    prepared = (
         assumption.operator.first => op,
         assumption.b => b,
     )
+    if assumption.AHA === nothing || AHA === nothing
+        return prepared
+    end
+    return (prepared..., assumption.AHA => AHA)
 end
 
 function print_diagnostics(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, variables::NTuple{N, Variable}) where N

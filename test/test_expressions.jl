@@ -282,13 +282,43 @@ ex3 = ex1-ex2
 @test_throws DimensionMismatch MatrixOp(randn(10,20))*Variable(20)+randn(11)
 @test_throws ErrorException MatrixOp(randn(10,20))*Variable(20)+(3+im)
 
-# Advanced (+) sum
-x, y, z, w = Variable(rand(10)), Variable(rand(20)), Variable(rand(30)), Variable(rand(40))
-A = randn(10,10)
-exA = (z[1:10]+x)+3*(x+z[1:10])+A*(w[1:10]+z[1:10])+(z[1:10]+w[1:10])
-exB = 5*w[1:10]+z[1:10]+z[1:10]+3*y[1:10]+z[1:10]
-exC = exA+exB
-op = operator(exC)
-output = op*ArrayPartition(~z,~x,~w,~y)
-expected_output = 4*(~x)+3*(~y)[1:10]+8*(~z)[1:10]+6*(~w)[1:10]+A*((~w)[1:10]+(~z)[1:10])
-@test norm(output-expected_output) < 1e-12
+# Advanced (+) sum: 4 variables, operator spans all of them
+@test begin
+    x, y, z, w = Variable(rand(10)), Variable(rand(20)), Variable(rand(30)), Variable(rand(40))
+    A = randn(10,10)
+    exA = (z[1:10]+x)+3*(x+z[1:10])+A*(w[1:10]+z[1:10])+(z[1:10]+w[1:10])
+    exB = 5*w[1:10]+z[1:10]+z[1:10]+3*y[1:10]+z[1:10]
+    exC = exA+exB
+    op = operator(exC)
+    output = op*ArrayPartition((~v for v in variables(exC))...)
+    expected_output = 4*(~x)+3*(~y)[1:10]+8*(~z)[1:10]+6*(~w)[1:10]+A*((~w)[1:10]+(~z)[1:10])
+    norm(output-expected_output) < 1e-12
+end
+
+# addition.jl — Usum_op single-variable paths
+let
+    x1 = Variable(4)
+    x2 = Variable(3)
+    A = randn(5, 4)
+    B = randn(5, 3)
+    ex1 = A*x1
+    ex2 = B*x2
+    ex_diff = ex1 - ex2
+    @test size(operator(ex_diff), 2) !== nothing
+end
+
+# addition.jl — broadcasted +/- with different codomain sizes
+let
+    x = Variable(4)
+    A = randn(10, 4)
+    x_s = Variable([0.0])
+    ex_big = A*x
+    ex_small = 1.0*x_s
+    ex_b = ex_big .+ ex_small
+    @test size(operator(ex_b), 1) == (10,)
+    ex_b2 = ex_small .+ ex_big
+    @test size(operator(ex_b2), 1) == (10,)
+    ex_d = ex_big .- ex_small
+    @test size(operator(ex_d), 1) == (10,)
+end
+

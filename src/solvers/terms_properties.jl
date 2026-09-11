@@ -25,11 +25,11 @@ function is_separable_sum(terms::TermSet)
 			end
             # All terms must be sliced for this variable
             operators = [get_operators_for_var(term, var) for term in terms_with_var]
-			if any(is_sliced(op) for op in operators)
+			if !all(is_sliced(op) for op in operators)
 				return false
 			end
 			# The sliced operators must not overlap
-            slicing_masks = [is_sliced(op) ? get_slicing_mask(op) : nothing for op in operators]
+            slicing_masks = [AbstractOperators.get_slicing_mask(op) for op in operators]
             for i in eachindex(operators), j in i+1:length(operators)
 				if any(slicing_masks[i] .&& slicing_masks[j])
 					return false
