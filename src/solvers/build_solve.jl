@@ -185,9 +185,18 @@ export solve
 # Run a solver on an already-parsed problem, apply kwarg overrides, and write the
 # minimizer back into the variable. `x_star` may be a Tuple for multi-variable
 # problems; take its first block in that case (the shared write-back convention).
+#
+# Every function `prepare` placed in `term_kwargs` (`:f`, `:g`, ...) is called by the
+# solver once per iteration with an `x0`-shaped input (`extract_operators` always
+# builds its operator over the full `variables` tuple, so every term's domain is the
+# same combined space `x0` lives in). `preallocate` is called once here, before the
+# iteration starts, so any scratch space those calls need is allocated once instead of
+# on every iteration; values with nothing to preallocate come back unchanged.
 function _run_solver(solver, term_kwargs, x; kwargs...)
     solver = override_parameters(solver; kwargs...)
-    x_star, it = solver(; x0 = ~x, term_kwargs...)
+    x0 = ~x
+    term_kwargs = Dict(key => preallocate(value, x0) for (key, value) in term_kwargs)
+    x_star, it = solver(; x0 = x0, term_kwargs...)
     ~x .= x_star isa Tuple ? x_star[1] : x_star
     return x, it
 end
