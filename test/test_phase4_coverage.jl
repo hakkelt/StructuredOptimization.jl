@@ -57,7 +57,7 @@ end
     @test_throws ErrorException conj(norm(randn(3, 5) * x, 1))
 end
 
-@testset "sqrNormL2WithNormalOp traits + normalop_ls" begin
+@testset "sqrNormL2WithNormalOp traits + ls auto-detection" begin
     x = Variable(6)
     A = randn(4, 6)
     f = SO4.SqrNormL2WithNormalOp(MatrixOp(A))
@@ -67,8 +67,8 @@ end
     # value: f(x) = 1/2 ||A x||^2
     xv = randn(6)
     @test abs(f(xv) - 0.5 * norm(A * xv)^2) < 1e-9 * (1 + norm(A * xv)^2)
-    # normalop_ls builds a Term whose f is a SqrNormL2WithNormalOp
-    t = normalop_ls(A * x)
+    # ls(A*x) auto-detects the non-identity operator and builds a SqrNormL2WithNormalOp
+    t = ls(A * x)
     @test t.f isa SO4.SqrNormL2WithNormalOp
 end
 
@@ -206,16 +206,18 @@ end
     ts_incompat = SO4.TermSet(norm(x, 1), norm(x, 2))
     @test !SO4.is_proximable(ts_incompat)
     @test !isempty(capture(() -> SO4.print_diagnostics(ts_incompat, simple_prox, (x,))))
-    # a single term failing the required property
+    # a single term failing the required property (built with the plain `SqrNormL2` Term,
+    # not `ls`, so the operator stays the real `A` — this is testing diagnostics on a
+    # non-eye operator, not `ls`'s normal-op selection)
     @test occursin("does not satisfy",
-        capture(() -> SO4.print_diagnostics(ls(A * x - b), simple_prox, (x,))))
+        capture(() -> SO4.print_diagnostics(SO4.Term(SqrNormL2(), A * x - b), simple_prox, (x,))))
 
     # OperatorTerm: non-eye decomposition, plus a multi-term set.
     ot = find_assumption(ProximalAlgorithms.OperatorTerm)
     @test ot !== nothing
     @test !isempty(capture(() -> SO4.print_diagnostics(norm(A * x, 1), ot, (x,))))
     @test !isempty(capture(() ->
-        SO4.print_diagnostics(SO4.TermSet(ls(A * x - b), norm(x, 1)), ot, (x,))))
+        SO4.print_diagnostics(SO4.TermSet(SO4.Term(SqrNormL2(), A * x - b), norm(x, 1)), ot, (x,))))
 
     # OperatorTermWithInfimalConvolution (single + multi-term).
     infc = find_assumption(ProximalAlgorithms.OperatorTermWithInfimalConvolution)

@@ -195,16 +195,20 @@ y = Variable(7)
 B = randn(5, 7)
 b = randn(5)
 
+# ls(A*x - b) auto-detects the normal-op path: the term's operator collapses to the
+# identity (A and the displacement are folded into `f` itself), so `f` is evaluated
+# directly on the raw variable rather than on a precomputed residual.
 cf = ls(A*x - b) + norm(x, 1)
 @test cf[1].lambda == 1
-@test cf[1].f(~x) == 0.5*norm(~x)^2
-@test norm(affine(cf[1])*(~x) - (A*(~x)-b)) < 1e-12
+@test cf[1].f isa StructuredOptimization.SqrNormL2WithNormalOp
+@test abs(cf[1].f(~x) - 0.5*norm(A*(~x)-b)^2) < 1e-9
+@test AbstractOperators.is_eye(operator(cf[1]))
 @test cf[2].lambda == 1
 @test cf[2].f(~x) == norm(~x,1)
 
 cf = ls(A*x - B*y + b) + norm(y, 1) + 5*norm(y, 2)
 @test cf[1].lambda == 1
-@test cf[1].f(~x) == 0.5*norm(~x)^2
+@test cf[1].f isa SqrNormL2  # multi-variable: normal-op path is not auto-selected
 @test cf[2].lambda == 1
 @test cf[2].f(~x) == norm(~x,1)
 @test cf[3].lambda == 5
@@ -212,7 +216,7 @@ cf = ls(A*x - B*y + b) + norm(y, 1) + 5*norm(y, 2)
 
 cf = 10*(ls(A*x - B*y + b) + norm(y, 1) + 5*norm(y, 2))
 @test cf[1].lambda == 10
-@test cf[1].f(~x) == 0.5*norm(~x)^2
+@test cf[1].f isa SqrNormL2  # multi-variable: normal-op path is not auto-selected
 @test cf[2].lambda == 10
 @test cf[2].f(~x) == norm(~x,1)
 @test cf[3].lambda == 50
@@ -246,13 +250,44 @@ cf = norm(x, 1) + norm(y, 2)
 @test StructuredOptimization.is_AcA_diagonal.(cf.terms) == (true,true)
 @test StructuredOptimization.is_AcA_diagonal(cf) == true
 
-# normalop_ls
+# ls auto-detects the SqrNormL2WithNormalOp opportunity when the operator isn't the identity
 A2 = randn(5, 10)
 x2 = Variable(10)
 ex = A2 * x2
-t_nls = normalop_ls(ex)
+t_nls = ls(ex)
 @test t_nls.f isa StructuredOptimization.SqrNormL2WithNormalOp
-@test_throws ErrorException normalop_ls(x2)
+@test ls(x2).f isa SqrNormL2  # bare Variable: operator is Eye, no normal-op needed
+
+# SqrNormL2WithNormalOp also supports a joint multi-variable domain (an ArrayPartition
+# identity built over several variables). `ls` itself does not auto-select this for a
+# multi-variable expression, since such a term's operator has to stay the identity on its
+# own joint domain and so cannot later be combined with unrelated-variable terms — but the
+# capability is still directly usable.
+let y2 = Variable(10)
+    ex_multi = A2 * x2 + A2 * y2
+    eye_multi = Eye(ArrayPartition(~x2, ~y2))
+    t_nls_multi = StructuredOptimization.Term(StructuredOptimization.SqrNormL2WithNormalOp(operator(ex_multi)), StructuredOptimization.Expression((x2, y2), eye_multi))
+    @test t_nls_multi.f isa StructuredOptimization.SqrNormL2WithNormalOp
+    @test StructuredOptimization.is_strongly_convex(t_nls_multi) == false
+
+    # gradient matches the plain-ls formulation exactly
+    op_multi = StructuredOptimization.extract_operators((x2, y2), t_nls_multi)
+    @test AbstractOperators.is_eye(op_multi)
+    xv, yv = randn(10), randn(10)
+    gy = ArrayPartition(zeros(10), zeros(10))
+    StructuredOptimization.gradient!(gy, t_nls_multi.f, ArrayPartition(xv, yv))
+    expected = A2' * (A2 * (xv + yv))
+    @test gy.x[1] ≈ expected
+    @test gy.x[2] ≈ expected
+
+    # end-to-end: `ls` on the same multi-variable expression is composable with other terms
+    nrmA2 = opnorm(A2)
+    b2 = randn(5)
+    x2a, y2a = Variable(10), Variable(10)
+    p_ls2 = problem(ls(A2 * x2a + A2 * y2a - b2), 0.05 * norm(x2a, 1), 0.05 * norm(y2a, 2))
+    sol = solve(p_ls2, ProximalAlgorithms.FastForwardBackward(Lf = 2 * nrmA2^2, maxit = 2000, tol = 1.0e-10))
+    @test !isnothing(sol)
+end
 
 # IndBallL2 must be marked proximable (needed for multi-variable parsing)
 @test StructuredOptimization.is_proximable(IndBallL2)
@@ -292,12 +327,12 @@ let x = Variable(4)
     @test_throws ErrorException (ex == 0.0)
 end
 
-# proximalOperators_bind.jl — normalop_ls with single-variable expression
+# proximalOperators_bind.jl — ls's normal-op path with single-variable expression
 let A = randn(8, 4), b = randn(8)
     x = Variable(4)
     ~x .= 0.0
     ex = A*x - b
-    t = normalop_ls(ex)
+    t = ls(ex)
     @test t isa StructuredOptimization.Term
     prob = problem(t)
     algs = StructuredOptimization.suggest_algorithm(prob)

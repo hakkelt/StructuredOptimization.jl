@@ -54,6 +54,8 @@ f_nop = StructuredOptimization.SqrNormL2WithNormalOp(L)
 yv = zero(xv)
 fy = gradient!(yv, f_nop, xv)
 @test norm(yv - L_mat' * (L_mat * xv)) < 1e-10
+# `gradient!` returns the function value, as `ProximalCore.value_and_gradient!` requires
+@test abs(fy - 0.5 * norm(L_mat * xv)^2) < 1e-10
 @test StructuredOptimization.is_convex(typeof(f_nop))
 @test StructuredOptimization.is_smooth(typeof(f_nop))
 @test StructuredOptimization.is_generalized_quadratic(typeof(f_nop))
@@ -62,5 +64,64 @@ fy = gradient!(yv, f_nop, xv)
 let A = randn(5, 4)
     op = MatrixOp(A)
     @test_throws ErrorException StructuredOptimization.SqrNormL2WithNormalOp(op, -1.0)
+end
+
+# SqrNormL2WithNormalOp: the value `gradient!` returns must stay the potential of the
+# gradient it actually computes, for a scalar λ, an array (weighted) λ, and an affine
+# operator (where the normal operator carries a displacement). Checked against the
+# closed form and against a finite-difference gradient.
+@testset "SqrNormL2WithNormalOp value, λ=$lambda, T=$T, affine=$affine" for
+        lambda in (1, 0.75, :array), T in (Float64, ComplexF64), affine in (false, true)
+    A = randn(T, 7, 4)
+    bvec = randn(T, 7)
+    xv = randn(T, 4)
+    op = affine ? AffineAdd(MatrixOp(A), bvec, false) : MatrixOp(A)
+    lam = lambda === :array ? rand(7) .+ 0.1 : lambda
+    f = StructuredOptimization.SqrNormL2WithNormalOp(op, lam)
+
+    resid = affine ? A * xv - bvec : A * xv
+    weighted_sqnorm = lam isa AbstractArray ? sum(lam[k] * abs2(resid[k]) for k in eachindex(resid)) : lam * norm(resid)^2
+    fval = weighted_sqnorm / 2
+    grad = lam isa AbstractArray ? A' * (lam .* resid) : lam * (A' * resid)
+
+    # the callable and `gradient!` must agree with each other and with the closed form
+    @test abs(f(xv) - fval) < 1.0e-9
+    yv = zero(xv)
+    @test abs(gradient!(yv, f, xv) - fval) < 1.0e-9
+    @test norm(yv - grad) < 1.0e-9
+
+    # finite differences on the real parametrization (the gradient is the Wirtinger
+    # gradient w.r.t. conj(x), so a real perturbation probes 2*Re⟨grad, δ⟩ correctly)
+    h = 1.0e-6
+    for k in eachindex(xv)
+        δ = zero(xv)
+        δ[k] = h
+        fd = (f(xv + δ) - f(xv - δ)) / (2h)
+        @test abs(fd - real(grad[k])) < 1.0e-5 * max(1, abs(grad[k]))
+        if T <: Complex
+            δ[k] = h * im
+            fd_im = (f(xv + δ) - f(xv - δ)) / (2h)
+            @test abs(fd_im - imag(grad[k])) < 1.0e-5 * max(1, abs(grad[k]))
+        end
+    end
+end
+
+# SqrNormL2WithNormalOp with an operator whose `'` is not the true adjoint (a
+# BACKWARD-normalized DFT: A' == A⁻¹ == Aᴴ/N). The value `gradient!` returns must
+# still be the potential of the (rescaled) gradient it actually produces.
+let n = 8
+    op = FFTWOperators.DFT(Float64, (n,); normalization = FFTWOperators.BACKWARD)
+    f = StructuredOptimization.SqrNormL2WithNormalOp(op)
+    xv = randn(n)
+    yv = zero(xv)
+    fy = gradient!(yv, f, xv)
+    @test abs(fy - f(xv)) < 1.0e-9
+    h = 1.0e-6
+    for k in eachindex(xv)
+        δ = zero(xv)
+        δ[k] = h
+        fd = (f(xv + δ) - f(xv - δ)) / (2h)
+        @test abs(fd - yv[k]) < 1.0e-4 * max(1, abs(yv[k]))
+    end
 end
 
