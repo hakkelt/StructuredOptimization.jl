@@ -136,3 +136,30 @@ let n = 4
     sol_n1 = solve(prob_n1, ProximalAlgorithms.PANOCplus(tol=1e-6))
     @test !isnothing(sol_n1)
 end
+
+# Phase 2.2 — `expand` pads a term to the problem's full domain through the same
+# `add_missing_vars` rule the expression layer uses for `Usum_op`, and must leave
+# everything else about the term alone (λ, f and the `repr` diagnostics print).
+@testset "expand pads through add_missing_vars" begin
+    Random.seed!(222)
+    xe, ye = Variable(4), Variable(3)
+    Ae, be = randn(5, 4), randn(5)
+    t = StructuredOptimization.Term(2.0, NormL1(), Ae * xe + be, "my_repr")
+
+    te = StructuredOptimization.expand((xe, ye), t)
+    @test te.repr == "my_repr"
+    @test te.lambda == t.lambda
+    @test te.f === t.f
+    @test StructuredOptimization.variables(te) == (xe, ye)
+
+    # The padded block is a true zero block: the widened operator agrees with the
+    # original one for every value of the added variable.
+    ve, we = randn(4), randn(3)
+    Le = StructuredOptimization.operator(te)
+    @test Le * ArrayPartition(ve, we) ≈ StructuredOptimization.operator(t) * ve
+    @test Le * ArrayPartition(ve, randn(3)) ≈ Le * ArrayPartition(ve, we)
+
+    # Nothing missing: `expand` is the identity (up to `convert`), not a rebuild.
+    ex = Ae * xe
+    @test StructuredOptimization.expand((xe,), ex) === convert(StructuredOptimization.Expression, ex)
+end
