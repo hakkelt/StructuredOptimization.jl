@@ -12,12 +12,12 @@ const merge_fo = StructuredOptimization.merge_function_with_operator
     Random.seed!(200)
 
     # helper: absorbed(x) ≈ λ * f(op*x + disp)
-    function check_absorption(op, f, disp, λ; cplx=false)
+    function check_absorption(op, f, disp, λ; cplx = false)
         g = merge_fo(op, f, disp, λ)
         for _ in 1:3
             x = cplx ? randn(ComplexF64, size(op, 2)) : randn(size(op, 2))
             expected = λ * f(op * x .+ disp)
-            @test abs(g(x) - expected) < 1e-9 * (1 + abs(expected))
+            @test abs(g(x) - expected) < 1.0e-9 * (1 + abs(expected))
         end
     end
 
@@ -55,5 +55,100 @@ const merge_fo = StructuredOptimization.merge_function_with_operator
         xv = Variable(5)
         op = SO2.operator(sin(xv))
         check_absorption(op, SqrNormL2(), randn(5), 3.1)
+    end
+end
+
+# Phase 2.2 — automatic selection of `SqrNormL2WithNormalOp` during absorption.
+#
+# `ls` can only fold the operator into the function for a single-variable expression (a
+# multi-variable normal-op term would collapse its variables into one operator domain and
+# could no longer be combined with other terms). The same rewrite is therefore retried in
+# `merge_function_with_operator`, where the operator has already been expanded to the
+# problem's full domain and is composed with nothing afterwards — so a multi-variable term
+# gets the normal-operator gradient after all, provided the joint normal operator both
+# fuses and is the cheaper of the two formulations.
+@testset "Phase 2.2 normal-op auto-selection" begin
+    Random.seed!(220)
+
+    # absorbed(x) ≈ λ·f(op*x + disp) and ∇absorbed(x) ≈ λ·opᴴ(op*x + disp), checked
+    # against the plain Precompose formulation the fold replaces.
+    function check_against_precompose(op, f, disp, λ, x)
+        g = merge_fo(op, f, disp, λ)
+        ref = Postcompose(Precompose(f, op, 1, disp), λ)
+        @test g(x) ≈ ref(x) rtol = 1.0e-9
+        gg, gr = zero(x), zero(x)
+        vg = SO2.gradient!(gg, g, x)
+        vr = ProximalOperators.gradient!(gr, ref, x)
+        @test vg ≈ vr rtol = 1.0e-9
+        @test gg ≈ gr rtol = 1.0e-9
+        return g
+    end
+
+    @testset "single variable, fusing operator" begin
+        op = MatrixOp(randn(7, 4))
+        g = check_against_precompose(op, SqrNormL2(1.5), randn(7), 2.2, randn(4))
+        @test g isa SO2.SqrNormL2WithNormalOp
+        g0 = check_against_precompose(op, SqrNormL2(), zeros(7), 1.0, randn(4))
+        @test g0 isa SO2.SqrNormL2WithNormalOp
+    end
+
+    # The joint operator has to be overdetermined for the block Gram to be worth building,
+    # so the two blocks together stay narrower than the shared codomain.
+    @testset "multiple variables (HCAT block Gram)" begin
+        x, y = Variable(10), Variable(7)
+        A, B, b = randn(25, 10), randn(25, 7), randn(25)
+        t = ls(A * x - B * y + b)
+        @test t.f isa SqrNormL2  # `ls` itself still declines multi-variable expressions
+        op = SO2.extract_operators((x, y), t)
+        @test op isa AbstractOperators.HCAT
+        g = check_against_precompose(
+            op, t.f, SO2.displacement(t), t.lambda, ArrayPartition(randn(10), randn(7))
+        )
+        @test g isa SO2.SqrNormL2WithNormalOp
+    end
+
+    # Only a squared L2 norm is rewritten, only when the normal operator actually fuses,
+    # and only when the normal operator is the cheaper of the two formulations.
+    @testset "declined" begin
+        op = MatrixOp(randn(6, 4))
+        @test !(merge_fo(op, NormL1(), randn(6), 0.9) isa SO2.SqrNormL2WithNormalOp)
+
+        xv = Variable(5)
+        nonfusing = SO2.operator(fft(MatrixOp(randn(5, 5)) * xv))
+        @test SO2.fused_normal_op(nonfusing) === nothing
+        @test SO2.with_normal_op(SqrNormL2(), nonfusing, 0, 1.0) === nothing
+
+        # one HCAT block that does not fuse is enough to make the block Gram the slower
+        # of the two formulations
+        x, y = Variable(5), Variable(5)
+        ex_mixed = MatrixOp(randn(12, 5)) * x + MatrixOp(randn(12, 4)) * y[1:4]
+        op_mixed = SO2.extract_operators((x, y), ls(ex_mixed))
+        @test op_mixed isa AbstractOperators.HCAT
+        @test SO2.normal_op_worthwhile(op_mixed)  # declined over fusion, not over size
+        @test SO2.fused_normal_op(op_mixed) === nothing
+
+        # underdetermined: `LᴴL` acts on the larger space, so it loses on both cost and
+        # conditioning even though every block product fuses
+        u, v = Variable(50), Variable(100)
+        op_wide = SO2.extract_operators((u, v), ls(randn(30, 50) * u + randn(30, 100) * v))
+        @test !SO2.normal_op_worthwhile(op_wide)
+        @test SO2.fused_normal_op(op_wide) === nothing
+        @test !(merge_fo(op_wide, SqrNormL2(), randn(30), 1.0) isa SO2.SqrNormL2WithNormalOp)
+
+        @test !SO2.normal_op_worthwhile(MatrixOp(randn(4, 6)))
+    end
+
+    # End-to-end: a purely smooth multi-variable least-squares problem now solved through
+    # the joint normal operator must still satisfy the normal equations.
+    @testset "multi-variable solve satisfies the normal equations" begin
+        x, y = Variable(10), Variable(6)
+        A, B, b = randn(20, 10), randn(20, 6), randn(20)
+        solve(
+            problem(ls(A * x + B * y - b)),
+            ProximalAlgorithms.FastForwardBackward(tol = 1.0e-10, maxit = 5000),
+        )
+        r = A * (~x) + B * (~y) - b
+        @test norm(A' * r) < 1.0e-4
+        @test norm(B' * r) < 1.0e-4
     end
 end

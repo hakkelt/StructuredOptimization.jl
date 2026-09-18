@@ -90,6 +90,15 @@ function merge_function_with_operator(op, f, disp, λ)
         f = Precompose(f, op, diag_AAc(op), disp)
     elseif is_linear(op)
         # we assume that prox will not be called on this term because it will not give a valid result
+        # Since only the gradient is ever asked of this branch, a squared L2 norm whose
+        # operator has a cheaper normal operator is better served by folding the operator
+        # into the function and differentiating through `opᴴ*op` in a single pass. This is
+        # the same optimisation `ls` applies eagerly to a single-variable expression, but
+        # performed here, where `op` has already been expanded to the problem's full
+        # domain — so it also reaches terms `ls` must leave alone, most notably
+        # multi-variable ones, whose joint domain only exists at this point.
+        f_normal = with_normal_op(f, op, disp, λ)
+        f_normal === nothing || return f_normal
         f = Precompose(f, op, 1, disp)
     else
         # we assume that prox will not be called on this term because it will not give a valid result

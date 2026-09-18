@@ -75,10 +75,16 @@ the gradient is evaluated through the normal operator `Lᴴ * L` in a single pas
 applying `L` and then `Lᴴ` — much faster whenever `Lᴴ * L` has an optimized implementation.
 The function value is unaffected: it is recovered from the gradient without a second
 application of `L` (see `SqrNormL2WithNormalOp`). Multi-variable expressions and nonlinear
-`L` always use the plain (non normal-op) path: a multi-variable normal-op term cannot be
-combined with unrelated-variable terms afterwards (its operator has to stay the identity on
-its own joint domain), and the normal-op optimization only makes sense for a linear `L`
-in the first place.
+`L` always use the plain (non normal-op) path here: a multi-variable normal-op term cannot
+be combined with unrelated-variable terms afterwards (its operator has to stay the identity
+on its own joint domain, which collapses the term's several variables into a single
+operator domain and breaks the one-variable-per-domain invariant the term algebra relies
+on), and the normal-op optimization only makes sense for a linear `L` in the first place.
+
+Such terms are not lost, though: the same rewrite is attempted again when the problem is
+parsed, at which point the operator has been expanded to the problem's full — possibly
+multi-variable — domain and nothing is composed with it any more. See
+`StructuredOptimization.with_normal_op`.
 """
 ls(x::Variable) = Term(SqrNormL2(), x)
 function ls(ex::AbstractExpression)
