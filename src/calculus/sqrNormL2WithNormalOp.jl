@@ -140,6 +140,10 @@ end
 
 is_convex(::Type{<:SqrNormL2WithNormalOp}) = true
 is_smooth(::Type{<:SqrNormL2WithNormalOp}) = true
+# Only the gradient is implemented. The default would infer proximability from convexity
+# and let a solver that needs a prox be selected, which would then fail at the first
+# iteration; the whole point of this function is to be the *smooth* formulation.
+is_proximable(::Type{<:SqrNormL2WithNormalOp}) = false
 is_separable(::Type{<:SqrNormL2WithNormalOp}) = true
 is_generalized_quadratic(::Type{<:SqrNormL2WithNormalOp}) = true
 is_strongly_convex(::Type{<:SqrNormL2WithNormalOp{T, SC}}) where {T, SC} = SC

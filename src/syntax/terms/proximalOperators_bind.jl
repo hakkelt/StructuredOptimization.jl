@@ -70,30 +70,21 @@ f (\\mathbf{x}) = \\frac{1}{2} \\| \\mathbf{x} \\|^2
 ```
 (shorthand of `1/2*norm(x)^2`).
 
-When `x` is `L*v` (or `L*v - b`) for a single variable `v` and a non-identity *linear* `L`,
-the gradient is evaluated through the normal operator `Lᴴ * L` in a single pass instead of
-applying `L` and then `Lᴴ` — much faster whenever `Lᴴ * L` has an optimized implementation.
-The function value is unaffected: it is recovered from the gradient without a second
-application of `L` (see `SqrNormL2WithNormalOp`). Multi-variable expressions and nonlinear
-`L` always use the plain (non normal-op) path here: a multi-variable normal-op term cannot
-be combined with unrelated-variable terms afterwards (its operator has to stay the identity
-on its own joint domain, which collapses the term's several variables into a single
-operator domain and breaks the one-variable-per-domain invariant the term algebra relies
-on), and the normal-op optimization only makes sense for a linear `L` in the first place.
+The term keeps `x`'s operator where the expression put it, separate from the function: this
+is a plain `SqrNormL2` composed with whatever `x` is. The faster formulations — evaluating
+the gradient through the normal operator `Lᴴ * L` in a single pass for an `x` of the form
+`L*v + d` (see `SqrNormL2WithNormalOp`), folding a diagonal `L` into the weight, keeping
+the exact prox of an `L` with diagonal `L*Lᴴ` — are all chosen when the problem is parsed,
+by `StructuredOptimization.merge_function_with_operator`.
 
-Such terms are not lost, though: the same rewrite is attempted again when the problem is
-parsed, at which point the operator has been expanded to the problem's full — possibly
-multi-variable — domain and nothing is composed with it any more. See
-`StructuredOptimization.with_normal_op`.
+Deferring the choice is what makes it a choice at all. Only at parse time is it known which
+of the formulations the selected algorithm can actually use (a prox, a gradient, or the
+operator on its own), and only then has the operator been expanded to the problem's full —
+possibly multi-variable — domain, where the normal-operator rewrite is both applicable and
+cheap to judge. Folding `L` into the function here would hide it from every one of those
+decisions.
 """
-ls(x::Variable) = Term(SqrNormL2(), x)
-function ls(ex::AbstractExpression)
-    ex = convert(Expression, ex)
-    L = operator(ex)
-    (length(ex.x) != 1 || !is_linear(L) || is_eye(L)) && return Term(SqrNormL2(), ex)
-    eye_op = Eye(AbstractOperators.allocate_in_domain(ex.L))
-    return Term(SqrNormL2WithNormalOp(ex.L), Expression(ex.x, eye_op))
-end
+ls(ex::AbstractExpression) = Term(SqrNormL2(), ex)
 
 import Base: ^
 

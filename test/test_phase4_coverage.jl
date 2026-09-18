@@ -57,7 +57,7 @@ end
     @test_throws ErrorException conj(norm(randn(3, 5) * x, 1))
 end
 
-@testset "sqrNormL2WithNormalOp traits + ls auto-detection" begin
+@testset "sqrNormL2WithNormalOp traits" begin
     x = Variable(6)
     A = randn(4, 6)
     f = SO4.SqrNormL2WithNormalOp(MatrixOp(A))
@@ -67,9 +67,10 @@ end
     # value: f(x) = 1/2 ||A x||^2
     xv = randn(6)
     @test abs(f(xv) - 0.5 * norm(A * xv)^2) < 1e-9 * (1 + norm(A * xv)^2)
-    # ls(A*x) auto-detects the non-identity operator and builds a SqrNormL2WithNormalOp
+    # the operator stays in the expression until the problem is parsed
     t = ls(A * x)
-    @test t.f isa SO4.SqrNormL2WithNormalOp
+    @test t.f isa SqrNormL2
+    @test SO4.operator(t) isa MatrixOp
 end
 
 @testset "parse.jl — LeastSquaresTerm scaling & sign (CGNR)" begin

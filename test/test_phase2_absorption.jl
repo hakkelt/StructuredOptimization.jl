@@ -60,13 +60,12 @@ end
 
 # Phase 2.2 — automatic selection of `SqrNormL2WithNormalOp` during absorption.
 #
-# `ls` can only fold the operator into the function for a single-variable expression (a
-# multi-variable normal-op term would collapse its variables into one operator domain and
-# could no longer be combined with other terms). The same rewrite is therefore retried in
-# `merge_function_with_operator`, where the operator has already been expanded to the
-# problem's full domain and is composed with nothing afterwards — so a multi-variable term
-# gets the normal-operator gradient after all, provided the joint normal operator both
-# fuses and is the cheaper of the two formulations.
+# The syntax layer never folds an operator into the function: `ls` builds a plain
+# `SqrNormL2` over whatever expression it was given. The normal-operator rewrite happens
+# only in `merge_function_with_operator`, where the operator has been expanded to the
+# problem's full domain and is composed with nothing afterwards — so it also covers
+# multi-variable terms, provided the joint normal operator both fuses and is the cheaper of
+# the two formulations.
 @testset "Phase 2.2 normal-op auto-selection" begin
     Random.seed!(220)
 
@@ -98,7 +97,7 @@ end
         x, y = Variable(10), Variable(7)
         A, B, b = randn(25, 10), randn(25, 7), randn(25)
         t = ls(A * x - B * y + b)
-        @test t.f isa SqrNormL2  # `ls` itself still declines multi-variable expressions
+        @test t.f isa SqrNormL2
         op = SO2.extract_operators((x, y), t)
         @test op isa AbstractOperators.HCAT
         g = check_against_precompose(
@@ -138,6 +137,17 @@ end
         @test !SO2.normal_op_worthwhile(MatrixOp(randn(4, 6)))
     end
 
+    # A single-variable least-squares term reaches the same rewrite through `prepare`,
+    # although `ls` itself no longer performs it.
+    @testset "single variable, through prepare" begin
+        v = Variable(4)
+        t = ls(MatrixOp(randn(7, 4)) * v - randn(7))
+        @test t.f isa SqrNormL2
+        smooth_assumption = ProximalAlgorithms.SimpleTerm(:f => [SO2.is_smooth])
+        prepared = SO2.prepare(t, smooth_assumption, (v,))
+        @test prepared[1].second isa SO2.SqrNormL2WithNormalOp
+    end
+
     # End-to-end: a purely smooth multi-variable least-squares problem now solved through
     # the joint normal operator must still satisfy the normal equations.
     @testset "multi-variable solve satisfies the normal equations" begin
@@ -150,5 +160,48 @@ end
         r = A * (~x) + B * (~y) - b
         @test norm(A' * r) < 1.0e-4
         @test norm(B' * r) < 1.0e-4
+    end
+end
+
+# Phase 2.3 — the formulation of a least-squares term is chosen at parse time, not by `ls`.
+#
+# `ls` used to fold a single-variable operator into a `SqrNormL2WithNormalOp` immediately,
+# which hid the operator from every later decision: the diagonal and AAᴴ-diagonal
+# absorptions never saw it, and the term advertised a prox it does not have. These tests
+# pin down what deferring the choice buys.
+@testset "Phase 2.3 deferred formulation choice" begin
+    Random.seed!(230)
+
+    @testset "diagonal operator folds into the weight, displacement and all" begin
+        a, b = randn(6), randn(6)
+        x = randn(6)
+
+        # no displacement: ½‖diag(a)·x‖² is the weighted squared norm itself
+        g0 = merge_fo(DiagOp(a), SqrNormL2(), 0, 1)
+        @test g0 isa SqrNormL2
+        @test g0(x) ≈ sum(abs2, a .* x) / 2
+
+        # with a displacement there is nowhere to put it in the weighted form, so the
+        # operator stays outside the function (it used to be dropped silently)
+        gd = merge_fo(DiagOp(a), SqrNormL2(), -b, 1)
+        @test gd(x) ≈ sum(abs2, a .* x .- b) / 2
+        @test SO2.is_proximable(gd)
+    end
+
+    @testset "AAᴴ-diagonal operator keeps its exact prox" begin
+        v = Variable(8)
+        op = SO2.operator(fft(v))
+        g = merge_fo(op, SqrNormL2(), zeros(ComplexF64, 8), 1.0)
+        @test g isa Precompose
+        @test !(g isa SO2.SqrNormL2WithNormalOp)
+        @test SO2.is_proximable(g)
+    end
+
+    # The normal-operator formulation implements `gradient!` and no `prox!`, so it must not
+    # claim proximability: a solver picked on that claim would fail at the first iteration.
+    @testset "the normal-op formulation is not proximable" begin
+        f = SO2.SqrNormL2WithNormalOp(MatrixOp(randn(7, 4)))
+        @test SO2.is_smooth(f)
+        @test !SO2.is_proximable(f)
     end
 end

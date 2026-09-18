@@ -46,13 +46,14 @@ but not convex, and why a convex-only solver rejects it.
 
 To match a proximal solver, the operator `A` inside `f(A·x + d)` must be folded into a
 new function whose proximal map (or gradient) is still computable. There is one
-canonical absorption transform, with five cases:
+canonical absorption transform, tried in this order:
 
 | Case | Condition on `A` | Absorbed function |
 |---|---|---|
 | identity | `A = I` | `f` (displacement folded in) |
-| diagonal | `A` diagonal | reweighted `f` |
+| diagonal | `A` diagonal | reweighted `f` (no displacement), else `PrecomposeDiagonal` |
 | `AAᴴ`-diagonal | `A Aᴴ = diag` | `Precompose(f, A, …)` — prox still closed-form |
+| normal operator | `f = ½‖·‖²`, `AᴴA` fuses and is cheaper | `SqrNormL2WithNormalOp` — gradient in one pass |
 | general linear | `A` linear | `Precompose(f, A, 1, d)` — gradient only, no prox |
 | non-linear | otherwise | `PrecomposeNonlinear(f, A+d)` — gradient only |
 
@@ -67,6 +68,19 @@ The `AAᴴ`-diagonal case is what makes `norm(fft(x), 1)` proximable: the DFT sa
 `A Aᴴ = N·I`, so `prox_{f∘A}` has a closed form. A general `A` (e.g. a random matrix)
 falls into the "general linear" row: only the gradient survives, so the term must be
 routed to a solver that treats it as smooth, not proximal.
+
+The order matters, and it is a preference order: every case above the "normal operator"
+row keeps an exact prox, so the normal-operator rewrite is only considered once prox is
+off the table anyway. It then applies when `AᴴA` collapses into a single operator (a Gram
+matrix, a squared diagonal, a frequency-domain multiplication) *and* `A` maps into a
+codomain at least as large as its domain, since `AᴴA` acts on the domain and forming it
+squares the condition number. A least-squares term over several variables is judged the
+same way, on the joint operator.
+
+All of this happens when the problem is parsed. The syntax layer builds only
+`λ · f(A·x + d)`: `ls(A*x - b)` is a plain `SqrNormL2` over the expression `A*x - b`, and
+which of the rows above it lands in depends on the operator *and* on what the selected
+algorithm asks of the term.
 
 ## Separable sums and sliced variables
 

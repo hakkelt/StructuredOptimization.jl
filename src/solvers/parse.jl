@@ -81,7 +81,10 @@ function merge_function_with_operator(op, f, disp, λ)
             f = ReshapeInput(f, size(op, 1))
         end
     elseif is_diagonal(op)
-        if f isa SqrNormL2
+        # ½‖diag(a)·x‖² is the same function as the weighted ½∑ aᵢ²xᵢ², so a diagonal
+        # operator can be folded into the weight — but only without a displacement, since
+        # the weighted form has nowhere to put one.
+        if f isa SqrNormL2 && iszero(disp)
             f = SqrNormL2(f.lambda .* diag(op) .^ 2)
         else
             f = PrecomposeDiagonal(f, diag(op), disp)
@@ -93,10 +96,10 @@ function merge_function_with_operator(op, f, disp, λ)
         # Since only the gradient is ever asked of this branch, a squared L2 norm whose
         # operator has a cheaper normal operator is better served by folding the operator
         # into the function and differentiating through `opᴴ*op` in a single pass. This is
-        # the same optimisation `ls` applies eagerly to a single-variable expression, but
-        # performed here, where `op` has already been expanded to the problem's full
-        # domain — so it also reaches terms `ls` must leave alone, most notably
-        # multi-variable ones, whose joint domain only exists at this point.
+        # the last branch, so it is reached only once the formulations that keep a usable
+        # prox have been ruled out — and `op` has by now been expanded to the problem's
+        # full domain, so the rewrite also covers multi-variable terms, whose joint domain
+        # exists nowhere earlier.
         f_normal = with_normal_op(f, op, disp, λ)
         f_normal === nothing || return f_normal
         f = Precompose(f, op, 1, disp)
