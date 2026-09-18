@@ -3,17 +3,17 @@ println("\nTesting cost terms\n")
 # Simple Terms
 
 x = Variable(randn(10))
-X = Variable(randn(3,4))
-A = randn(4,10)
+X = Variable(randn(3, 4))
+A = randn(4, 10)
 b = randn(4)
 
 cf = norm(x, 0)
 @test cf.lambda == 1
-@test cf.f(~x) == norm(~x,0)
+@test cf.f(~x) == norm(~x, 0)
 
-cf = 3*norm(x, 0)
+cf = 3 * norm(x, 0)
 @test cf.lambda == 3
-@test cf.f(~x) == norm(~x,0)
+@test cf.f(~x) == norm(~x, 0)
 
 cf = norm(x, 0) <= 3
 @test cf.lambda == 1
@@ -27,27 +27,27 @@ cf = norm(x, 1) <= 1.5
 @test cf.lambda == 1
 @test cf.f(~x) == (IndBallL1(1.5))(~x)
 
-cf = 10*norm(x, 1) <= 1.5
+cf = 10 * norm(x, 1) <= 1.5
 @test cf.lambda == 1
-@test cf.f(~x) == (IndBallL1(1.5/10))(~x)
+@test cf.f(~x) == (IndBallL1(1.5 / 10))(~x)
 
 cf = norm(x)
 @test cf.lambda == 1
 @test cf.f(~x) == norm(~x)
 
-cf = pi*norm(x,2)
+cf = pi * norm(x, 2)
 @test cf.lambda - pi == 0
 @test cf.f(~x) == norm(~x)
 
-cf = 3*norm(X,2,1)
+cf = 3 * norm(X, 2, 1)
 @test cf.lambda - 3 == 0
-@test cf.f(~X) == sum(  sqrt.(sum((~X).^2, dims=1 )) ) 
+@test cf.f(~X) == sum(sqrt.(sum((~X) .^ 2, dims = 1)))
 
-cf = 4*norm(X,2,1; dim=2)
+cf = 4 * norm(X, 2, 1; dim = 2)
 @test cf.lambda - 4 == 0
-@test cf.f(~X) == sum(  sqrt.(sum((~X).^2, dims=2 )) ) 
+@test cf.f(~X) == sum(sqrt.(sum((~X) .^ 2, dims = 2)))
 
-@test_throws ErrorException 4*norm(X,1,2)
+@test_throws ErrorException 4 * norm(X, 1, 2)
 
 cf = norm(x, 2) <= 2.3
 @test cf.lambda == 1
@@ -59,7 +59,7 @@ cf = norm(x, 2) == 2.3
 
 cf = norm(x, Inf)
 @test cf.lambda == 1
-@test cf.f(~x) == norm(~x,Inf)
+@test cf.f(~x) == norm(~x, Inf)
 
 cf = norm(x, Inf) <= 5.0
 @test cf.lambda == 1
@@ -79,7 +79,7 @@ cf = x >= 1.0
 
 cf = 1.0 >= x
 @test cf.lambda == 1
-@test cf.f(~x) == (IndBox(-Inf,1.0))(~x)
+@test cf.f(~x) == (IndBox(-Inf, 1.0))(~x)
 
 cf = x in [-5.0, 5.0]
 @test cf.lambda == 1
@@ -89,44 +89,44 @@ cf = norm(x, 2)^2
 @test cf.lambda == 1
 @test cf.f(~x) == norm(~x)^2
 
-cf = 0.5*norm(x, 2)^2
+cf = 0.5 * norm(x, 2)^2
 @test cf.lambda == 0.5
 @test cf.f(~x) == norm(~x)^2
 
-cf = 7*(0.5*norm(x, 2))^2
-@test cf.lambda == 7*0.25
+cf = 7 * (0.5 * norm(x, 2))^2
+@test cf.lambda == 7 * 0.25
 @test cf.f(~x) == norm(~x)^2
 
-cf = 2*rank(X) <= 6
+cf = 2 * rank(X) <= 6
 @test cf.lambda == 1
 @test cf.f(~X) == (IndBallRank(3))(~X)
 
 cf = rank(X)
 @test_throws MethodError cf.f(~X)
 
-cf = norm(X,*)
+cf = norm(X, *)
 U, S, V = svd(~X)
 @test cf.lambda == 1
 @test cf.f(~X) == sum(S)
 
 y = randn(size(~x))
-cf = hingeloss(x,y)
+cf = hingeloss(x, y)
 @test cf.lambda == 1
 @test cf.f(~x) == (HingeLoss(y))(~x)
 
 y = randn(size(~x))
-cf = sqrhingeloss(x,y)
+cf = sqrhingeloss(x, y)
 @test cf.lambda == 1
 @test cf.f(~x) == (SqrHingeLoss(y))(~x)
 
 y = randn(size(~x))
-cf = logisticloss(x,y)
+cf = logisticloss(x, y)
 @test cf.lambda == 1
 @test cf.f(~x) == (LogisticLoss(y))(~x)
 
-xp = Variable(rand(10)) 
+xp = Variable(rand(10))
 bp = rand(Float64, size(~xp))
-cf = crossentropy(xp,bp)
+cf = crossentropy(xp, bp)
 @test cf.lambda == 1
 @test cf.f(~xp) == (CrossEntropy(bp))(~xp)
 
@@ -142,18 +142,18 @@ cf = sumpositive(x)
 @test cf.lambda == 1
 @test cf.f(~x) == (SumPositive())(~x)
 
-a = 1.
-cf = huberloss(x,a)
+a = 1.0
+cf = huberloss(x, a)
 @test cf.lambda == 1
 @test cf.f(~x) == (HuberLoss(a))(~x)
 
 a = randn(size(x))
-cf = dot(a,x)
+cf = dot(a, x)
 @test cf.lambda == 1
 @test cf.f(~x) == (Linear(a))(~x)
 
 #IndBinary
-lu = (-1.0,randn(length(~x)))
+lu = (-1.0, randn(length(~x)))
 cf = x == lu
 @test cf.lambda == 1
 @test cf.f(~x) == (IndBinary(lu...))(~x)
@@ -168,37 +168,37 @@ absorb(cf) = StructuredOptimization.merge_function_with_operator(
 # `A*x - b == 0` and `A*x == b` are the same constraint, so both absorb to IndAffine(A, b).
 # Asserted on the prox (the projection), not on the value: the indicator is `Inf` at almost
 # every point, which makes a value comparison vacuous.
-for cf in (A*x-b == 0, A*x == b)
+for cf in (A * x - b == 0, A * x == b)
     @test cf.lambda == 1
     @test cf.f isa IndPoint
     g = absorb(cf)
     @test g isa IndAffine
     y_ref, _ = prox(IndAffine(A, b), ~x, 1.0)
     y_got, _ = prox(g, ~x, 1.0)
-    @test norm(y_got - y_ref) < 1e-10
-    @test norm(A*y_got - b) < 1e-10
+    @test norm(y_got - y_ref) < 1.0e-10
+    @test norm(A * y_got - b) < 1.0e-10
     @test g(y_got) == 0.0
 end
 
-cf = 2*norm(x,1)
+cf = 2 * norm(x, 1)
 ccf = conj(cf)
 @test ccf.A == cf.A
-@test ccf.f == Conjugate(Postcompose(NormL1(),2.0))
-@test_throws ErrorException conj(norm(randn(2,10)*x,1))
+@test ccf.f == Conjugate(Postcompose(NormL1(), 2.0))
+@test_throws ErrorException conj(norm(randn(2, 10) * x, 1))
 
-cf = 2*norm(x,1)
-ccf = smooth(cf,2.0)
+cf = 2 * norm(x, 1)
+ccf = smooth(cf, 2.0)
 @test ccf.A == cf.A
-@test ccf.f(~x) == MoreauEnvelope(Postcompose(NormL1(),2),2.0)(~x)
+@test ccf.f(~x) == MoreauEnvelope(Postcompose(NormL1(), 2), 2.0)(~x)
 
 # Summing terms
 
 x = Variable(10)
-cf = ls(x) + 10*norm(x, 1)
+cf = ls(x) + 10 * norm(x, 1)
 @test cf[1].lambda == 1
-@test cf[1].f(~x) == 0.5*norm(~x)^2
+@test cf[1].f(~x) == 0.5 * norm(~x)^2
 @test cf[2].lambda == 10
-@test cf[2].f(~x) == norm(~x,1)
+@test cf[2].f(~x) == norm(~x, 1)
 
 # More complex situations
 
@@ -211,37 +211,37 @@ b = randn(5)
 # `ls` builds a plain squared L2 norm and leaves the operator and the displacement in the
 # expression, where the parser can still see them. The faster formulations (normal
 # operator, diagonal weight fold, ...) are chosen in `merge_function_with_operator`.
-cf = ls(A*x - b) + norm(x, 1)
+cf = ls(A * x - b) + norm(x, 1)
 @test cf[1].lambda == 1
 @test cf[1].f isa SqrNormL2
 @test operator(cf[1]) isa MatrixOp
 @test displacement(cf[1]) == -b
 @test cf[2].lambda == 1
-@test cf[2].f(~x) == norm(~x,1)
+@test cf[2].f(~x) == norm(~x, 1)
 
-cf = ls(A*x - B*y + b) + norm(y, 1) + 5*norm(y, 2)
+cf = ls(A * x - B * y + b) + norm(y, 1) + 5 * norm(y, 2)
 @test cf[1].lambda == 1
 @test cf[1].f isa SqrNormL2
 @test cf[2].lambda == 1
-@test cf[2].f(~x) == norm(~x,1)
+@test cf[2].f(~x) == norm(~x, 1)
 @test cf[3].lambda == 5
-@test cf[3].f(~x) == norm(~x,2)
+@test cf[3].f(~x) == norm(~x, 2)
 
-cf = 10*(ls(A*x - B*y + b) + norm(y, 1) + 5*norm(y, 2))
+cf = 10 * (ls(A * x - B * y + b) + norm(y, 1) + 5 * norm(y, 2))
 @test cf[1].lambda == 10
 @test cf[1].f isa SqrNormL2
 @test cf[2].lambda == 10
-@test cf[2].f(~x) == norm(~x,1)
+@test cf[2].f(~x) == norm(~x, 1)
 @test cf[3].lambda == 50
-@test cf[3].f(~x) == norm(~x,2)
+@test cf[3].f(~x) == norm(~x, 2)
 
-cf = 0.5*norm(A*x - B*y + b, 2)^2 + norm(x, 1) + norm(y, 2)
+cf = 0.5 * norm(A * x - B * y + b, 2)^2 + norm(x, 1) + norm(y, 2)
 @test cf[1].lambda == 0.5
 @test cf[1].f(~x) == norm(~x)^2
 @test cf[2].lambda == 1
-@test cf[2].f(~x) == norm(~x,1)
+@test cf[2].f(~x) == norm(~x, 1)
 @test cf[3].lambda == 1
-@test cf[3].f(~x) == norm(~x,2)
+@test cf[3].f(~x) == norm(~x, 2)
 
 # Properties
 A = randn(5, 10)
@@ -249,7 +249,7 @@ u = Variable(5)
 w = Variable(5)
 z = Variable(5)
 
-cf = norm(A*x + z)
+cf = norm(A * x + z)
 @test StructuredOptimization.is_smooth(cf) == false
 @test StructuredOptimization.is_smooth(cf^2) == true
 
@@ -258,9 +258,9 @@ cf = norm(w + z)^2
 @test StructuredOptimization.is_AcA_diagonal(cf) == false
 
 cf = norm(x, 1) + norm(y, 2)
-@test StructuredOptimization.is_smooth.(cf.terms) == (false,false)
+@test StructuredOptimization.is_smooth.(cf.terms) == (false, false)
 @test StructuredOptimization.is_smooth(cf) == false
-@test StructuredOptimization.is_AcA_diagonal.(cf.terms) == (true,true)
+@test StructuredOptimization.is_AcA_diagonal.(cf.terms) == (true, true)
 @test StructuredOptimization.is_AcA_diagonal(cf) == true
 
 # `ls` never folds the operator into the function, whatever the operator is: the term is a
@@ -311,7 +311,7 @@ end
 
 # Properties: separable iff diagonal operator
 @test StructuredOptimization.is_separable(norm(x, 1))
-@test !StructuredOptimization.is_separable(norm(A*x, 1))
+@test !StructuredOptimization.is_separable(norm(A * x, 1))
 
 # Properties: strongly convex iff full column rank operator
 A_tall = randn(15, 10)
@@ -324,7 +324,7 @@ A_tall = randn(15, 10)
 # Term + TermSet combinator
 let A = randn(5, 4), b = randn(5), c = randn(4)
     x = Variable(4)
-    t1 = ls(A*x - b)
+    t1 = ls(A * x - b)
     t2 = norm(x, 1)
     ts = t1 + t2
     t3 = dot(c, x)
@@ -349,7 +349,7 @@ let x = Variable(4)
         StructuredOptimization.displacement(t_eq), t_eq.lambda
     )
     y_eq, v_eq = prox(g_eq, randn(ComplexF64, 4), 1.0)
-    @test norm(y_eq) < 1e-12
+    @test norm(y_eq) < 1.0e-12
     @test v_eq == 0.0
 end
 
@@ -357,16 +357,16 @@ end
 let A = randn(8, 4), b = randn(8)
     x = Variable(4)
     ~x .= 0.0
-    ex = A*x - b
+    ex = A * x - b
     t = ls(ex)
     @test t isa StructuredOptimization.Term
     prob = problem(t)
     algs = StructuredOptimization.suggest_algorithm(prob)
     @test !isempty(algs)
-    sol = solve(prob, ProximalAlgorithms.PANOCplus(tol=1e-6))
+    sol = solve(prob, ProximalAlgorithms.PANOCplus(tol = 1.0e-6))
     @test !isnothing(sol)
-    x_true = A'*A\(A'*b)
-    @test norm(~x - x_true, Inf) / (1 + norm(x_true, Inf)) <= 5e-4
+    x_true = A' * A \ (A' * b)
+    @test norm(~x - x_true, Inf) / (1 + norm(x_true, Inf)) <= 5.0e-4
 end
 
 # is_proximable returning false (overlapping variables between two terms)
@@ -402,4 +402,3 @@ let
     @test all(StructuredOptimization.is_proximable.(ts))
     @test !StructuredOptimization.is_separable_sum(ts)
 end
-

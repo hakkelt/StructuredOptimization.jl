@@ -35,7 +35,7 @@ end
         f = res[1].second                     # ProximalOperators.Sum
         xt = randn(3)
         true_val = lam * 0.5 * norm(sin.(xt) + c)^2 + 0.5 * norm(xt - b)^2
-        @test abs(f(xt) - true_val) < 1e-10
+        @test abs(f(xt) - true_val) < 1.0e-10
     end
 
     # 1.2 — OperatorTerm TermSet path must carry displacement only in the operator
@@ -57,7 +57,7 @@ end
         op = res[2].second
         xt = randn(3)
         true_val = lam * 0.5 * norm(A1 * xt - b1)^2 + 0.5 * norm(A2 * xt - b2)^2
-        @test abs(f(op * xt) - true_val) < 1e-9
+        @test abs(f(op * xt) - true_val) < 1.0e-9
     end
 
     # 1.3 — the func₂ branch of the InfConv TermSet path must return the same
@@ -95,16 +95,16 @@ end
         res = SO.prepare(t, ProximalAlgorithms.LeastSquaresTerm(:A => (is_linear,), :b), vars)
         opres = res[1].second
         v = randn(5)
-        @test norm(opres * v - sqrt(a) * (A * v)) < 1e-9
+        @test norm(opres * v - sqrt(a) * (A * v)) < 1.0e-9
 
         # end-to-end: CGNR (LeastSquaresTerm+SquaredL2Term) must agree with PANOCplus
         # (smooth path, unaffected by this bug) on the same weighted ridge problem.
         r = 0.3
         xc = Variable(5)
-        solve(problem(a * ls(A * xc - b) + r * norm(xc, 2)^2), ProximalAlgorithms.CGNR(maxit=5000, tol=1e-12))
+        solve(problem(a * ls(A * xc - b) + r * norm(xc, 2)^2), ProximalAlgorithms.CGNR(maxit = 5000, tol = 1.0e-12))
         xp = Variable(5)
-        solve(problem(a * ls(A * xp - b) + r * norm(xp, 2)^2), ProximalAlgorithms.PANOCplus(maxit=8000, tol=1e-10))
-        @test norm(~xc - ~xp) < 1e-4
+        solve(problem(a * ls(A * xp - b) + r * norm(xp, 2)^2), ProximalAlgorithms.PANOCplus(maxit = 8000, tol = 1.0e-10))
+        @test norm(~xc - ~xp) < 1.0e-4
     end
 
     # 1.5 — weighted SqrNormL2WithNormalOp gradient applies weights in the codomain
@@ -118,16 +118,16 @@ end
         xv = randn(4)
         yv = zero(xv)
         v = gradient!(yv, f, xv)
-        @test norm(yv - Lm' * (lam .* (Lm * xv))) < 1e-9
-        @test abs(f(xv) - 0.5 * sum(lam .* (Lm * xv) .^ 2)) < 1e-10
+        @test norm(yv - Lm' * (lam .* (Lm * xv))) < 1.0e-9
+        @test abs(f(xv) - 0.5 * sum(lam .* (Lm * xv) .^ 2)) < 1.0e-10
         # finite-difference check of the gradient
         g_fd = similar(xv)
-        h = 1e-6
+        h = 1.0e-6
         for k in eachindex(xv)
             e = zero(xv); e[k] = h
             g_fd[k] = (f(xv + e) - f(xv - e)) / (2h)
         end
-        @test norm(yv - g_fd) / norm(g_fd) < 1e-4
+        @test norm(yv - g_fd) / norm(g_fd) < 1.0e-4
 
         # tall, full-column-rank operator with positive weights => strongly convex
         @test SO.is_strongly_convex(typeof(f))
@@ -143,12 +143,12 @@ end
         b = randn(6)
         x = Variable(4)
         p = problem(ls(A * x - b))
-        sol = solve(p, [ProximalAlgorithms.PANOCplus(tol=1e-6, maxit=2000)])
+        sol = solve(p, [ProximalAlgorithms.PANOCplus(tol = 1.0e-6, maxit = 2000)])
         @test sol !== nothing
         # also a tuple of heterogeneous solvers
         x2 = Variable(4)
         p2 = problem(ls(A * x2 - b))
-        sol2 = solve(p2, (ProximalAlgorithms.PANOCplus(tol=1e-6, maxit=2000),))
+        sol2 = solve(p2, (ProximalAlgorithms.PANOCplus(tol = 1.0e-6, maxit = 2000),))
         @test sol2 !== nothing
     end
 
@@ -160,7 +160,7 @@ end
         bb = randn(6)
         x1 = Variable(4)
         x2 = Variable(4)
-        p = problem(ls(A1 * x1 - A2 * x2 - bb) + 1e-2 * norm(x1, 1))
+        p = problem(ls(A1 * x1 - A2 * x2 - bb) + 1.0e-2 * norm(x1, 1))
         # Should not throw regardless of whether the minimizer comes back as a Tuple.
         sol = solve(p)
         @test sol !== nothing

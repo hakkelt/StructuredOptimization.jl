@@ -18,7 +18,7 @@ end
     c = randn(3)
     @test displacement(x + c) == c                       # A*x + c  ->  +c
     A = randn(4, 3); b = randn(4)
-    @test norm(displacement(A * x - b) - (-b)) < 1e-12    # A*x - b  ->  -b
+    @test norm(displacement(A * x - b) - (-b)) < 1.0e-12    # A*x - b  ->  -b
     @test SO4.variables(x) == (x,)
 end
 
@@ -66,7 +66,7 @@ end
     @test SO4.is_generalized_quadratic(T)
     # value: f(x) = 1/2 ||A x||^2
     xv = randn(6)
-    @test abs(f(xv) - 0.5 * norm(A * xv)^2) < 1e-9 * (1 + norm(A * xv)^2)
+    @test abs(f(xv) - 0.5 * norm(A * xv)^2) < 1.0e-9 * (1 + norm(A * xv)^2)
     # the operator stays in the expression until the problem is parsed
     t = ls(A * x)
     @test t.f isa SqrNormL2
@@ -90,9 +90,9 @@ end
     op = d[ls_assumption.operator.first]
     bvec = d[ls_assumption.b]
     # residual operator scaled by sqrt(lambda); target b = sqrt(lambda) * b_data
-    @test norm(bvec - sqrt(a) * b) < 1e-8
+    @test norm(bvec - sqrt(a) * b) < 1.0e-8
     xr = randn(5)
-    @test norm(op * xr - sqrt(a) * (A * xr)) < 1e-8
+    @test norm(op * xr - sqrt(a) * (A * xr)) < 1.0e-8
 
     # A non-least-squares function is rejected by the LeastSquares path.
     bad = norm(x, 1)
@@ -210,41 +210,65 @@ end
     # a single term failing the required property (built with the plain `SqrNormL2` Term,
     # not `ls`, so the operator stays the real `A` — this is testing diagnostics on a
     # non-eye operator, not `ls`'s normal-op selection)
-    @test occursin("does not satisfy",
-        capture(() -> SO4.print_diagnostics(SO4.Term(SqrNormL2(), A * x - b), simple_prox, (x,))))
+    @test occursin(
+        "does not satisfy",
+        capture(() -> SO4.print_diagnostics(SO4.Term(SqrNormL2(), A * x - b), simple_prox, (x,)))
+    )
 
     # OperatorTerm: non-eye decomposition, plus a multi-term set.
     ot = find_assumption(ProximalAlgorithms.OperatorTerm)
     @test ot !== nothing
     @test !isempty(capture(() -> SO4.print_diagnostics(norm(A * x, 1), ot, (x,))))
-    @test !isempty(capture(() ->
-        SO4.print_diagnostics(SO4.TermSet(SO4.Term(SqrNormL2(), A * x - b), norm(x, 1)), ot, (x,))))
+    @test !isempty(
+        capture(
+            () ->
+            SO4.print_diagnostics(SO4.TermSet(SO4.Term(SqrNormL2(), A * x - b), norm(x, 1)), ot, (x,))
+        )
+    )
 
     # OperatorTermWithInfimalConvolution (single + multi-term).
     infc = find_assumption(ProximalAlgorithms.OperatorTermWithInfimalConvolution)
     if infc !== nothing
         @test !isempty(capture(() -> SO4.print_diagnostics(norm(A * x, 1), infc, (x,))))
-        @test !isempty(capture(() ->
-            SO4.print_diagnostics(SO4.TermSet(ls(A * x - b), norm(x, 1)), infc, (x,))))
+        @test !isempty(
+            capture(
+                () ->
+                SO4.print_diagnostics(SO4.TermSet(ls(A * x - b), norm(x, 1)), infc, (x,))
+            )
+        )
     end
 
     # LeastSquaresTerm: not-least-squares message, decomposition, and multi-term.
     lsa = find_assumption(ProximalAlgorithms.LeastSquaresTerm)
-    @test occursin("least squares",
-        capture(() -> SO4.print_diagnostics(norm(x, 1), lsa, (x,))))
+    @test occursin(
+        "least squares",
+        capture(() -> SO4.print_diagnostics(norm(x, 1), lsa, (x,)))
+    )
     @test !isempty(capture(() -> SO4.print_diagnostics(ls(A * x - b), lsa, (x,))))
-    @test !isempty(capture(() ->
-        SO4.print_diagnostics(SO4.TermSet(ls(A * x - b), norm(x, 1)), lsa, (x,))))
+    @test !isempty(
+        capture(
+            () ->
+            SO4.print_diagnostics(SO4.TermSet(ls(A * x - b), norm(x, 1)), lsa, (x,))
+        )
+    )
 
     # SquaredL2Term: displacement / not-squared-L2 / not-eye-or-diagonal / multi-term.
     sq = find_assumption(ProximalAlgorithms.SquaredL2Term)
-    @test occursin("displacement",
-        capture(() -> SO4.print_diagnostics(norm(x - c, 2)^2, sq, (x,))))
-    @test occursin("squared L2",
-        capture(() -> SO4.print_diagnostics(norm(x, 1), sq, (x,))))
+    @test occursin(
+        "displacement",
+        capture(() -> SO4.print_diagnostics(norm(x - c, 2)^2, sq, (x,)))
+    )
+    @test occursin(
+        "squared L2",
+        capture(() -> SO4.print_diagnostics(norm(x, 1), sq, (x,)))
+    )
     @test !isempty(capture(() -> SO4.print_diagnostics(norm(A * x, 2)^2, sq, (x,))))
-    @test !isempty(capture(() ->
-        SO4.print_diagnostics(SO4.TermSet(norm(x, 2)^2, norm(x, 1)), sq, (x,))))
+    @test !isempty(
+        capture(
+            () ->
+            SO4.print_diagnostics(SO4.TermSet(norm(x, 2)^2, norm(x, 1)), sq, (x,))
+        )
+    )
 
     # Single-element TermSet delegates to the single-term method for each family
     # (the `length(terms) == 1` branches in prepare / print_diagnostics). Use a
@@ -348,7 +372,7 @@ end
     A = randn(3, 4); c = randn(3)
     wv = randn(4)
     affval(ex) = SO4.operator(ex) * wv + displacement(ex)
-    @test norm(affval(A * w - c) - (A * wv - c)) < 1e-12
-    @test norm(affval(c - A * w) - (c - A * wv)) < 1e-12
-    @test norm(affval(c + A * w) - (c + A * wv)) < 1e-12
+    @test norm(affval(A * w - c) - (A * wv - c)) < 1.0e-12
+    @test norm(affval(c - A * w) - (c - A * wv)) < 1.0e-12
+    @test norm(affval(c + A * w) - (c + A * wv)) < 1.0e-12
 end

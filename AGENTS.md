@@ -27,10 +27,7 @@ Key solver files:
 
 **Dependencies**: `AbstractOperators.jl`, `ProximalOperators.jl`, `ProximalAlgorithms.jl`, `ProximalCore.jl` are dev'd locally via `test/Project.toml` `[sources]`, pointing at sibling checkouts (`../../AbstractOperators`, `../../ProximalAlgorithms.jl`, etc.). Those checkouts may be on feature branches — check `git -C <path> branch --show-current` rather than assuming a branch name, since it changes over time.
 
-Two declared deps are not referenced in `src/` today and are kept intentionally:
-- `DifferentiationInterface` — reserved for Phase 5 (differentiable solvers / unrolling); `ProximalAlgorithms` already routes autodiff through it.
-- `AbstractFFTs` — the generic `fft`/`rfft` interface that `FFTWOperators` and the `import FFTW: fft` bindings build on; retained so the FFT expression bindings resolve against a stable interface package.
-`DSP`/`FFTW` are used (function-name imports in `syntax/expressions/abstractOperator_bind.jl`).
+`DifferentiationInterface` and `AbstractFFTs` used to be declared without being referenced in `src/`. Both are gone: the differentiable-solvers/unrolling work they were reserved for was dropped, and the FFT bindings resolve through `FFTW`/`FFTWOperators` without naming `AbstractFFTs` directly (it still arrives as their transitive dependency). `DSP`/`FFTW` are used (function-name imports in `syntax/expressions/abstractOperator_bind.jl`).
 
 ## Testing Conventions
 
@@ -113,10 +110,13 @@ The HPC login node is shared, so treat both local and CI numbers as ratios, not 
 The measured `normal_op_worthwhile` crossover is recorded in that function's docstring.
 
 ### Formatting
-- This project uses **Runic.jl** for formatting
+- This project uses **Runic.jl** for formatting, over `src/`, `test/` and `benchmark/`
 - Install: `julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'`
-- Format: `julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))' -- --inplace src/`
-- Format before committing
+- Format: `julia --project=@runic --startup-file=no -e 'using Runic; exit(Runic.main(ARGS))' -- --inplace src/ test/ benchmark/`
+- Format before committing; `.github/workflows/format.yml` runs the same command with
+  `--check --diff` and fails the build on drift
+- There is deliberately **no `.JuliaFormatter.toml`**: JuliaFormatter has no Runic style, so
+  a config file would only point editors at a second, disagreeing formatter
 
 ## Known Issues / Broken Tests
 
