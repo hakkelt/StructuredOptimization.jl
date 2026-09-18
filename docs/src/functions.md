@@ -8,7 +8,6 @@ or [Equality constraints](@ref).
 
 ```@docs
 ls
-normalop_ls
 huberloss
 sqrhingeloss
 crossentropy

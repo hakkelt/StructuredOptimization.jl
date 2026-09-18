@@ -118,7 +118,7 @@ src/
       term.jl                 # Term type, ls(), norm(), smooth(), ...
   calculus/
     precomposeNonlinear.jl
-    sqrNormL2WithNormalOp.jl  # normalop_ls
+    sqrNormL2WithNormalOp.jl  # backs ls()'s normal-op auto-detection
   solvers/
     terms_extract.jl
     terms_properties.jl
