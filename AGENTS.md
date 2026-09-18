@@ -89,6 +89,29 @@ julia --project=test -e '
 ```
 `generate_coverage` runs the test suite with `--code-coverage=user` and drops `*.jl.<pid>.cov` files next to each source file — remove them (`find . -name '*.cov' -delete`) once done, they are generated artifacts and should not be committed.
 
+### Benchmarks
+
+Two directories, easy to confuse:
+
+- `benchmark/` (singular) — the AirspeedVelocity.jl suite, `benchmark/benchmarks.jl`
+  exporting `SUITE`. It guards the cost model behind formulation selection: the normal
+  operator against `Precompose` across tall/square/wide operators, the multi-variable block
+  Gram against the two-pass `HCAT`, the diagonal and AAᴴ-diagonal absorptions against the
+  naive forms, and the parse-time scoring budget against a five-iteration solve.
+- `benchmarks/` (plural) — the demo scripts that reproduce the documentation figures. Not a
+  benchmark suite; leave it alone.
+
+Run the suite locally:
+```sh
+julia --project=benchmark -e 'include("benchmark/benchmarks.jl"); using BenchmarkTools; run(SUITE)'
+```
+Compare two revisions the way `.github/workflows/benchmark.yml` does:
+```sh
+benchpkg StructuredOptimization --rev=master,HEAD
+```
+The HPC login node is shared, so treat both local and CI numbers as ratios, not absolutes.
+The measured `normal_op_worthwhile` crossover is recorded in that function's docstring.
+
 ### Formatting
 - This project uses **Runic.jl** for formatting
 - Install: `julia --project=@runic --startup-file=no -e 'using Pkg; Pkg.add("Runic")'`

@@ -202,6 +202,26 @@ prod(size(L, 2))` of applying `L` and then `Lᴴ` — the normal operator only w
 domain is the smaller of the two spaces. Forming it also squares the condition number, and
 on a wide `L` that is paid for nothing. A least-squares term over several variables is the
 usual way to end up wide, since its domain is the sum of the blocks' domains.
+
+# Where the threshold comes from
+
+It was originally set from a single observed regression. `benchmark/benchmarks.jl` now
+measures it. For a dense `MatrixOp` (Julia 1.13, one thread of a shared HPC node, so read
+the ratios rather than the absolute numbers):
+
+| `n × m` | gradient, `LᴴL` | gradient, `Precompose` | building `LᴴL` | break-even |
+|---|---|---|---|---|
+| 200 × 800 (tall) | 7.2 µs | 38.6 µs | 1.38 ms | ~44 iterations |
+| 400 × 400 (square) | 33.0 µs | 66.4 µs | 1.67 ms | ~50 iterations |
+| 400 × 300 (mildly wide) | 34.9 µs | 37.9 µs | 1.19 ms | ~400 iterations |
+| 800 × 200 (wide) | 54.5 µs | 58.1 µs | 3.40 ms | ~950 iterations |
+
+So the per-iteration saving collapses to a few percent — within noise — as soon as `n > m`,
+while the one-off cost of forming the Gram matrix keeps growing, pushing break-even from
+around fifty iterations to several hundred. `n ≤ m` is where the formulation pays for itself
+over a realistic run, and that is before counting the squared condition number, which the
+timings do not capture at all. The measurements confirm the original threshold rather than
+moving it.
 """
 normal_op_worthwhile(L::AbstractOperator) =
     is_linear(L) && !is_eye(L) && _total_length(size(L, 2)) <= _total_length(size(L, 1))
