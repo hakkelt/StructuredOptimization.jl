@@ -13,7 +13,7 @@ L = StructuredOptimization.extract_operators(xAll,cf)
 @test typeof(L) <: MatrixOp
 La = StructuredOptimization.extract_affines(xAll,cf)
 @test typeof(La) <: MatrixOp
-f = StructuredOptimization.extract_functions(cf)
+f = StructuredOptimization.weighted_function(cf)
 @test typeof(f) <: SqrNormL2
 
 # multiple terms, single variable
@@ -29,12 +29,15 @@ V2 = StructuredOptimization.extract_affines(xAll,cf)
 @test typeof(V2) <: VCAT
 @test typeof(V2[1]) <: MatrixOp
 @test typeof(V2[2]) <: AffineAdd{T} where {T <: Eye}
-f = StructuredOptimization.extract_functions(cf)
+f = StructuredOptimization.weighted_function(cf)
 @test typeof(f) <: SeparableSum
 @test typeof(f.fs[1]) <: SqrNormL2
 @test typeof(f.fs[2]) <: Postcompose
 x = randn(n1)
-@test norm(f.fs[2](x) - 2.5*norm(x+b1,1)) < 1e-12
+# `weighted_function` applies λ and nothing else: the displacement `b1` stays in the
+# affine operator `V2[2]`, which is where the solver reads it from.
+@test norm(f.fs[2](x) - 2.5*norm(x,1)) < 1e-12
+@test norm(f.fs[2](V2[2]*x) - 2.5*norm(x+b1,1)) < 1e-12
 
 # single term, multiple variables
 x2 = Variable(m)
@@ -48,8 +51,9 @@ H = StructuredOptimization.extract_operators(xAll,cf)
 H2 = StructuredOptimization.extract_affines(xAll,cf)
 @test typeof(H2[1]) <: AffineAdd{T} where {T <: Eye}
 @test typeof(H2[2]) <: AffineAdd{T} where {T <: MatrixOp}
-f = StructuredOptimization.extract_functions(cf)
-@test typeof(f) <: PrecomposeDiagonal
+f = StructuredOptimization.weighted_function(cf)
+# The `+20` displacement is carried by the affine operators `H2`, not folded into `f`.
+@test typeof(f) <: SqrNormL2
 
 ### multiple terms, multiple variables
 n1,n2,n3,n4,n5 = 3,3,4,4,7

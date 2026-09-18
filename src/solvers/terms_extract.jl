@@ -7,22 +7,15 @@ function extract_variables(t::Union{Tuple, TermSet})
     return tuple(unique(vars)...)
 end
 
-# extract functions from terms
-function extract_functions(t::Term)
-    disp = displacement(t)
-    f = disp == 0 ? t.f : PrecomposeDiagonal(t.f, one(t.lambda), disp) #for now I keep this
-    f = t.lambda == 1 ? f : Postcompose(f, t.lambda)                                  #for now I keep this
-    #TODO change this
-    return f
-end
-extract_functions(t::TermSet) = SeparableSum(extract_functions.(t)...)
-
-# extract functions from terms without displacement
-function extract_functions_nodisp(t::Term)
-    f = t.lambda == 1 ? t.f : Postcompose(t.f, t.lambda)
-    return f
-end
-extract_functions_nodisp(t::TermSet) = SeparableSum(extract_functions_nodisp.(t)...)
+# The term's function with its weight λ applied, and nothing else.
+#
+# This is the one extraction convention in the package: a term is `λ · f(A·x + d)`, the
+# displacement `d` is carried by the affine operator (`extract_affines`/`affine`), and λ is
+# applied exactly once, here. Anything that folds the operator or the displacement into the
+# function is an *absorption* and belongs in `merge_function_with_operator`, which is the
+# only place that knows what the selected algorithm will ask of the term.
+weighted_function(t::Term) = t.lambda == 1 ? t.f : Postcompose(t.f, t.lambda)
+weighted_function(t::TermSet) = SeparableSum(weighted_function.(t)...)
 
 # Extract the linear operators (`accessor = operator`) or the affine operators
 # keeping displacement (`accessor = affine`) from a term/expression, ordered to match

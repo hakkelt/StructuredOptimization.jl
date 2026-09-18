@@ -3,6 +3,19 @@
 
 const SO = StructuredOptimization
 
+# Capture the stdout of a diagnostics call as a String. `redirect_stdout` needs a real
+# file descriptor, so route through a temp file rather than an IOBuffer.
+function capture_stdout(f)
+    return mktemp() do _path, io
+        redirect_stdout(io) do
+            f()
+        end
+        flush(io)
+        seekstart(io)
+        read(io, String)
+    end
+end
+
 @testset "Phase 1 regressions" begin
 
     # 1.1 — sum of smooth terms containing a nonlinear composition must not
@@ -26,7 +39,7 @@ const SO = StructuredOptimization
     end
 
     # 1.2 — OperatorTerm TermSet path must carry displacement only in the operator
-    # (via extract_functions_nodisp), never fold it into f as well.
+    # (via weighted_function), never fold it into f as well.
     @testset "1.2 no double displacement in OperatorTerm TermSet path" begin
         Random.seed!(12)
         x = Variable(3)
@@ -161,6 +174,38 @@ const SO = StructuredOptimization
         @test length(2.0 * ts) == length(ts)
         t = SO.Term(norm(x, 1), "custom_repr")
         @test (3.0 * t).repr == "custom_repr"
+    end
+
+    # 1.1/1.2 residue — the *diagnostics* printed for the OperatorTerm and InfConv paths
+    # must show the same decomposition the matching `prepare` would build. They used to
+    # print a displacement-folded `PrecomposeDiagonal` next to an operator that still
+    # carried the same displacement, i.e. a decomposition with the displacement applied
+    # twice, which is not the problem that would have been solved.
+    @testset "1.1/1.2 diagnostics do not double-count displacement" begin
+        Random.seed!(112)
+        x = Variable(3)
+        A1, A2 = randn(4, 3), randn(4, 3)
+        b1, b2 = randn(4), randn(4)
+        ts = 2.0 * ls(A1 * x - b1) + ls(A2 * x - b2)
+        vars = SO.extract_variables(ts)
+
+        # An assumption whose operator side cannot be satisfied, so the decomposition is
+        # printed rather than accepted.
+        op_asm = ProximalAlgorithms.OperatorTerm(:f => (SO.is_proximable,), :A => (is_eye,))
+        out = capture_stdout(() -> SO.print_diagnostics(ts, op_asm, vars))
+        @test occursin("A possible decomposition", out)
+        @test !occursin("PrecomposeDiagonal", out)
+
+        inf_asm = ProximalAlgorithms.OperatorTermWithInfimalConvolution(
+            :f => (SO.is_proximable,), :g => (SO.is_proximable,), :A => (is_eye,)
+        )
+        out2 = capture_stdout(() -> SO.print_diagnostics(ts, inf_asm, vars))
+        @test !occursin("PrecomposeDiagonal", out2)
+
+        # The single-term InfConv diagnostics path uses the same convention.
+        t = ls(A1 * x - b1)
+        out3 = capture_stdout(() -> SO.print_diagnostics(t, inf_asm, (x,)))
+        @test !occursin("PrecomposeDiagonal", out3)
     end
 
     # 1.9 — UnregularIndex length counts iterator states (prod), not sum.

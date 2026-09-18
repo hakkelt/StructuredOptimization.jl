@@ -195,8 +195,17 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.SimpleTerm, vari
             op = remove_slicing(op)
             hcat_ops = op.A
             μs = Tuple(AbstractOperators.diag_AAc(op_i) for op_i in op.A)
-            f = extract_functions(terms)
-            return (assumption.func.first => PrecomposedSlicedSeparableSum(f.fs, idxs, hcat_ops, μs),)
+            # This is the one site that wants the displacement inside the function rather
+            # than in the operator: `PrecomposedSlicedSeparableSum` is handed the *linear*
+            # blocks `hcat_ops` (displacement removed) and precomposes each `fᵢ` with them
+            # itself, so a displacement left in the operator would simply be dropped.
+            function fold_displacement(t::Term)
+                disp = displacement(t)
+                f = disp == 0 ? t.f : PrecomposeDiagonal(t.f, one(t.lambda), disp)
+                return t.lambda == 1 ? f : Postcompose(f, t.lambda)
+            end
+            f = Tuple(fold_displacement(t) for t in terms)
+            return (assumption.func.first => PrecomposedSlicedSeparableSum(f, idxs, hcat_ops, μs),)
         end
     else
         fs = ()
@@ -251,7 +260,7 @@ function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTerm, variab
     op = extract_affines(variables, term)
     if does_satisfy(op, assumption.operator) && does_satisfy(term.f, assumption.func)
         return (
-            assumption.func.first => term.lambda == 1 ? term.f : Postcompose(term.f, term.lambda),
+            assumption.func.first => weighted_function(term),
             assumption.operator.first => op,
         )
     else # try preparing as a simple term
@@ -272,7 +281,7 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.OperatorTe
         println("Term $repr does not satisfy required properties: $(join(problematic_properties, ", "))")
     else
         println("A possible decomposition of term $repr:")
-        f = term.lambda == 1 ? term.f : Postcompose(term.f, term.lambda)
+        f = weighted_function(term)
         print(" - ", assumption.func.first, " = ", f)
         if !does_satisfy(f, assumption.func)
             problematic_properties = unsatisfied_properties(f, assumption.func)
@@ -298,7 +307,7 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTerm, va
     end
     op = extract_affines(variables, terms)
     # Displacement lives in the affine operator `op`; never fold it into `f` too.
-    f = extract_functions_nodisp(terms)
+    f = weighted_function(terms)
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func)
         return (
             assumption.func.first => f,
@@ -311,7 +320,10 @@ end
 
 function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.OperatorTerm, variables::NTuple{N, Variable}) where {N}
     op = extract_affines(variables, terms)
-    f = extract_functions(terms)
+    # Same convention as the matching `prepare`: the displacement is carried by `op`, so
+    # the printed function must not fold it in as well — the decomposition shown has to be
+    # the one that would actually be solved.
+    f = weighted_function(terms)
     repr = string(terms)
     if is_eye(op)
         for term in terms
@@ -342,7 +354,7 @@ end
 function prepare(term::Term, assumption::ProximalAlgorithms.OperatorTermWithInfimalConvolution, variables::NTuple{N, Variable}) where {N}
     op = extract_affines(variables, term)
     # Displacement lives in the affine operator `op`; never fold it into `f` too.
-    f = extract_functions_nodisp(term)
+    f = weighted_function(term)
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₁)
         return (
             assumption.func₁.first => f,
@@ -366,7 +378,8 @@ end
 
 function print_diagnostics(term::Term, assumption::ProximalAlgorithms.OperatorTermWithInfimalConvolution, variables::NTuple{N, Variable}) where {N}
     op = affine(term)
-    f = extract_functions(term)
+    # `op` already carries the displacement; see the note in the `OperatorTerm` diagnostics.
+    f = weighted_function(term)
     repr = term.repr !== nothing ? term.repr : string(term)
     if is_eye(op)
         problematic_properties = unsatisfied_properties(term.f, assumption.func₁)
@@ -398,7 +411,7 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.OperatorTermWith
     end
     op = extract_affines(variables, terms)
     # Displacement lives in the affine operator `op`; never fold it into `f` too.
-    f = extract_functions_nodisp(terms)
+    f = weighted_function(terms)
     if does_satisfy(op, assumption.operator) && does_satisfy(f, assumption.func₁)
         return (
             assumption.func₁.first => f,
@@ -429,7 +442,8 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Operat
         return
     end
     op = affine(terms[1])
-    f = extract_functions(terms)
+    # `op` already carries the displacement; see the note in the `OperatorTerm` diagnostics.
+    f = weighted_function(terms)
     repr = string(terms)
     if is_eye(op)
         for term in terms
