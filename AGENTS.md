@@ -76,15 +76,37 @@ julia --project=test -e '
 ```
 
 ### Coverage
-Use `LocalCoverage.jl` to measure and view test coverage:
+Use `LocalCoverage.jl`. It runs the test suite itself, in a *subprocess*, so it must not be
+loaded into the test environment — `--project=test` is wrong, and `LocalCoverage` is
+deliberately absent from `test/Project.toml`. Give it an environment of its own with the
+package `dev`ed into it:
+
 ```sh
-julia --project=test -e '
+julia --startup-file=no -e '
+  using Pkg
+  Pkg.activate(joinpath(homedir(), ".julia", "environments", "coverage"); shared=false)
+  Pkg.add("LocalCoverage")           # once
+  Pkg.develop(path=".")              # once, from the package root
+'
+julia --startup-file=no -e '
+  using Pkg
+  Pkg.activate(joinpath(homedir(), ".julia", "environments", "coverage"); shared=false)
   using LocalCoverage
-  cov = generate_coverage("StructuredOptimization")
-  LocalCoverage.html_coverage(cov; dir="coverage_html")
+  cov = generate_coverage("StructuredOptimization"; run_test=true)
+  for f in cov.files
+    println(f.filename, " ", round(100*f.lines_hit/max(f.lines_tracked,1); digits=2), "%")
+    foreach(g -> println("    gap: ", g), f.coverage_gaps)   # the uncovered line ranges
+  end
 '
 ```
-`generate_coverage` runs the test suite with `--code-coverage=user` and drops `*.jl.<pid>.cov` files next to each source file — remove them (`find . -name '*.cov' -delete`) once done, they are generated artifacts and should not be committed.
+
+`f.coverage_gaps` is what tells you *which* lines to write a test for; `FileCoverageSummary`
+has no per-line `coverage` field. A full run takes 15–20 minutes on the shared node.
+
+`generate_coverage` drops `*.jl.<pid>.cov` files next to each source file and removes them
+itself when it finishes; if a run is interrupted, clear them with `find . -name '*.cov'
+-delete`. They are generated artifacts and must not be committed. `genhtml` is unavailable
+here, so the HTML report happens in CI via Codecov.
 
 ### Benchmarks
 

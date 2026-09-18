@@ -297,34 +297,23 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.SimpleTerm
     end
 end
 
+# One absorbed function per variable, in `variables` order, for the case where every
+# variable is mentioned by exactly one term — which is what the caller has already
+# established. A variable no term mentions contributes `IndFree()`, the indicator of the
+# whole space, so the `SeparableSum` still covers the full domain.
+#
+# The multiple-terms-per-variable case is *not* handled here: it is unreachable from the
+# only caller (which enters this function only when every bag holds one term), and the
+# sliced case it would have covered is handled by the `PrecomposedSlicedSeparableSum`
+# branch alongside it.
 function prepare_proximable_single_var_per_term(variable_bags, variables::NTuple{N, Variable}) where {N}
     fs = ()
     for var in variables
         if haskey(variable_bags, var)
-            term_list = variable_bags[var]
-            if length(term_list) > 1
-                #multiple terms per variable
-                #currently this happens only with GetIndex
-                fxi, idxs = (), ()
-                for ti in term_list
-                    op = operator(ti)
-                    fxi = (fxi..., merge_function_with_operator(op, ti.f, displacement(ti), ti.lambda; needs = :prox))
-                    if AbstractOperators.ndoms(op, 2) > 1
-                        op = op[findfirst(==(var), variables(ti))]
-                    end
-                    if typeof(op) <: Compose
-                        idx = op.A[1].idx
-                    else
-                        idx = op.idx
-                    end
-                    idxs = (idxs..., AbstractOperators.get_slicing_mask(op))
-                end
-                fs = (fs..., SlicedSeparableSum(fxi, idxs))
-            else
-                op = operator(term_list[1])
-                disp = displacement(term_list[1])
-                fs = (fs..., merge_function_with_operator(op, term_list[1].f, disp, term_list[1].lambda; needs = :prox))
-            end
+            term = only(variable_bags[var])
+            op = operator(term)
+            disp = displacement(term)
+            fs = (fs..., merge_function_with_operator(op, term.f, disp, term.lambda; needs = :prox))
         else
             fs = (fs..., IndFree())
         end
