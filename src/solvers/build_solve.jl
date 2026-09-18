@@ -179,6 +179,53 @@ function unsatisfied_reasons(term, assumptions)
     return reasons
 end
 
+# The term's `repr` if it has one, its `show` form otherwise — what a user wrote, as
+# opposed to the desugared operator graph.
+_term_repr(term::Term) = term.repr !== nothing ? term.repr : string(term)
+_term_repr(term) = string(term)
+
+"""
+    parse_failure_message(terms, what) -> String
+
+Why `terms` could not be parsed for `what` (a solver type name, or a phrase describing a
+set of solvers), naming each unparseable term and the property that blocked it.
+
+`solve` prints the full `print_diagnostics` report before failing, but the report goes to
+stdout and is lost to a caller that catches the error. PLAN.md 2.4 asks for a *rejecting*
+ruleset, so the message itself has to carry the term's `repr` and the failed DCP-style
+property — that is the difference between a caught error a program can act on and one it
+can only re-raise.
+"""
+function parse_failure_message(terms::TermSet, what::AbstractString, algorithm = closest_algorithm(terms))
+    lines = ["Sorry, I cannot parse this problem for $what."]
+    if algorithm !== nothing
+        _, remaining_terms = parse_problem(terms, algorithm, true)
+        assumptions = ProximalAlgorithms.get_assumptions(algorithm)
+        for term in remaining_terms
+            reasons = unsatisfied_reasons(term, assumptions)
+            entry = isempty(reasons) ?
+                "  - $(_term_repr(term)): no assumption of $(typeof(algorithm).name.name) accepts its structure" :
+                "  - $(_term_repr(term)): $(join(reasons, "; "))"
+            entry in lines || push!(lines, entry)
+        end
+    end
+    push!(lines, "Call print_diagnostics(problem) for the full report.")
+    return join(lines, "\n")
+end
+
+# The algorithm that leaves the fewest terms unparsed, or `nothing` if there are none to
+# choose from. This is the same "closest match" `print_diagnostics(terms)` reports.
+function closest_algorithm(terms::TermSet, algorithms = ProximalAlgorithms.get_algorithms())
+    best, fewest = nothing, nothing
+    for algorithm in algorithms
+        _, remaining_terms = parse_problem(terms, algorithm, true)
+        if fewest === nothing || length(remaining_terms) < fewest
+            best, fewest = algorithm, length(remaining_terms)
+        end
+    end
+    return best
+end
+
 # Auto-selection: the algorithm whose *complete* parse is cheapest, by the same cost model
 # the formulation layer uses, with the order `get_algorithms` advertises breaking ties. The
 # two layers are scored jointly here: an algorithm that asks less of a term (a gradient
@@ -229,14 +276,7 @@ end
 
 function print_diagnostics(terms::Union{Term, TermSet})
     terms = terms isa TermSet ? terms : TermSet(terms)
-    best_algorithm, best_algorithm_remaining_terms = nothing, Inf
-    for algorithm in ProximalAlgorithms.get_algorithms()
-        _, remaining_terms = parse_problem(terms, algorithm, true)
-        if length(remaining_terms) < best_algorithm_remaining_terms
-            best_algorithm_remaining_terms = length(remaining_terms)
-            best_algorithm = algorithm
-        end
-    end
+    best_algorithm = closest_algorithm(terms)
     println("The closest algorithm to the problem is $best_algorithm")
     return print_diagnostics(terms, best_algorithm)
 end
@@ -298,10 +338,10 @@ function solve(terms::Union{Term, TermSet}, solvers::Union{<:AbstractVector{<:It
     end
     return if length(solvers) == 1
         print_diagnostics(terms, solvers[1])
-        error("Sorry, I cannot parse this problem for solver of type $(typeof(solvers[1]).parameters[1])")
+        error(parse_failure_message(terms, "solver of type $(typeof(solvers[1]).parameters[1])", solvers[1]))
     else
         print_diagnostics(terms)
-        error("Sorry, I cannot parse this problem for any of the provided solvers")
+        error(parse_failure_message(terms, "any of the provided solvers", closest_algorithm(terms, solvers)))
     end
 end
 
@@ -310,7 +350,7 @@ function solve(terms::Union{Term, TermSet}, solver::IterativeAlgorithm; kwargs..
     result = parse_problem(terms, solver)
     if result === nothing
         print_diagnostics(terms, solver)
-        error("Sorry, I cannot parse this problem for solver of type $(typeof(solver).parameters[1])")
+        error(parse_failure_message(terms, "solver of type $(typeof(solver).parameters[1])", solver))
     end
     _, term_kwargs, x = result
     return _run_solver(solver, term_kwargs, x; kwargs...)
@@ -321,7 +361,7 @@ function solve(terms::Union{Term, TermSet}; kwargs...)
     result = parse_problem(terms)
     if result === nothing
         print_diagnostics(terms)
-        error("Sorry, I cannot find a suitable solver for this problem")
+        error(parse_failure_message(terms, "any available solver"))
     end
     solver, term_kwargs, x = result
     return _run_solver(solver, term_kwargs, x; kwargs...)

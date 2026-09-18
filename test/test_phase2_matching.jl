@@ -67,6 +67,31 @@ end
     diag = capture_diagnostics(() -> SO_M.print_diagnostics(p, FastForwardBackward()))
     @test occursin("is_convex", diag)
 
+    # ... and so does the *exception*, not only the report printed to stdout: a caught
+    # error has to be as informative as the printed one (PLAN.md 2.4).
+    err = try
+        capture_diagnostics(() -> solve(p, FastForwardBackward()))
+        nothing
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    @test occursin("is_convex", err.msg)
+    @test occursin(SO_M._term_repr(first(p)), err.msg)
+    @test occursin("print_diagnostics", err.msg)
+
+    # The solver-list path diagnoses against the solvers it was given, not against every
+    # algorithm in the registry (ZeroFPR parses this problem, and would otherwise make the
+    # message claim there is nothing wrong with it).
+    err_list = try
+        capture_diagnostics(() -> solve(p, [FastForwardBackward(), FastForwardBackward()]))
+        nothing
+    catch e
+        e
+    end
+    @test err_list isa ErrorException
+    @test occursin("is_convex", err_list.msg)
+
     # ZeroFPR permits nonconvex smooth f, so it parses the same problem.
     @test SO_M.parse_problem(p, ZeroFPR()) !== nothing
 end
