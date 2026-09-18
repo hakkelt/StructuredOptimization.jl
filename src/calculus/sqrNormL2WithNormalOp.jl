@@ -206,6 +206,53 @@ usual way to end up wide, since its domain is the sum of the blocks' domains.
 normal_op_worthwhile(L::AbstractOperator) =
     is_linear(L) && !is_eye(L) && _total_length(size(L, 2)) <= _total_length(size(L, 1))
 
+"""
+    normal_op_fuses(L::AbstractOperator)
+
+Whether `Lᴴ * L` fuses into a single operator, decided **from the types alone**.
+
+This is the scoring-time counterpart of [`fused_normal_op`](@ref), which answers the same
+question by building the product — for a `MatrixOp` that means forming the Gram matrix,
+`O(n²m)`, more work than several iterations of the solver the score is meant to select.
+`best_formulation` may only call this one; `fused_normal_op` is reached once, for the
+candidate that wins.
+
+The answer comes from type inference on `adjoint` and `*`, so nothing is constructed. It is
+deliberately conservative: an inference result of `Any` (or `Union{}`) counts as *not*
+fusing, so an operator whose product cannot be predicted is scored as the generic linear
+case. Being conservative here costs at worst a suboptimal-but-correct formulation, never a
+wrong one — and `merge_function_with_operator` falls back to `Precompose` if the optimistic
+direction ever turns out wrong.
+"""
+normal_op_fuses(L::AbstractOperator) = _product_fuses(_adjoint_type(typeof(L)), typeof(L))
+
+# The normal operator of an `HCAT` is the block Gram `[Lᵢᴴ Lⱼ]`; it is only worth assembling
+# when *every* one of the N² block products fuses (see `fused_normal_op(::HCAT)`).
+function normal_op_fuses(L::AbstractOperators.HCAT)
+    types = map(typeof, L.A)
+    return all(_product_fuses(_adjoint_type(Ti), Tj) for Ti in types, Tj in types)
+end
+
+_adjoint_type(::Type{T}) where {T} = Base.promote_op(adjoint, T)
+_product_fuses(::Type{A}, ::Type{B}) where {A, B} = _fuses(Base.promote_op(*, A, B))
+_fuses(::Type{T}) where {T} = !(T === Any || T === Union{} || T <: AbstractOperators.Compose)
+
+"""
+    normal_op_applicable(f, op, disp, λ)
+
+Whether the `SqrNormL2WithNormalOp` formulation is a candidate for `λ · f(op·x + disp)`,
+decided without building anything. It mirrors the guards of [`with_normal_op`](@ref) — a
+squared ``\\ell_2`` norm with scalar weights, a displacement that is either absent or an
+array — plus [`normal_op_worthwhile`](@ref) and the type-level [`normal_op_fuses`](@ref).
+"""
+normal_op_applicable(f, op, disp, λ) = false
+function normal_op_applicable(f::SqrNormL2, op::AbstractOperator, disp, λ)
+    (λ isa Real && f.lambda isa Real) || return false
+    has_disp = !(disp isa Number && iszero(disp))
+    (has_disp && !(disp isa AbstractArray)) && return false
+    return normal_op_worthwhile(op) && normal_op_fuses(op)
+end
+
 # `size(op, i)` is a plain size tuple for a single-block operator and a tuple of such
 # tuples for a block operator (`HCAT`, `VCAT`), so count the elements of either shape.
 _total_length(size_::Tuple{Vararg{Int}}) = prod(size_)

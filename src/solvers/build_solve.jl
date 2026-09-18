@@ -31,40 +31,92 @@ julia> StructuredOptimization.parse_problem(p, PANOCplus());
 # `parse_problem`/`suggest_algorithm`/`print_diagnostics` behavior stable.
 candidate_term_subsets(remaining_terms) = reverse(collect(powerset(remaining_terms, 1)))
 
-# Try to consume some subset of `remaining_terms` with `assumption`, most-preferred
-# subset first. Returns `(preparation_result, matched_terms)` on the first success,
-# or `nothing` if no subset satisfies the assumption.
-function match_assumption(assumption, remaining_terms, variables)
-    for term_selection in candidate_term_subsets(remaining_terms)
-        preparation_result = prepare(TermSet(term_selection...), assumption, variables)
-        if preparation_result !== nothing
-            return preparation_result, term_selection
-        end
+# What a term subset costs an assumption, in the units of `best_formulation`: the sum over
+# its terms of the cheapest formulation the assumption can actually use.
+#
+# This is the scoring half of the two-layer search. It reads only the *unexpanded* term
+# operator — a field access — and the trait predicates, so it neither builds an operator nor
+# touches an array; the whole score of a problem costs a few dozen type queries against the
+# thousands of operator applications of the optimization pass it selects.
+function selection_cost(assumption, term_selection)
+    needs = needs_prox(assumption) ? :prox : :any
+    total = 0.0
+    for term in term_selection
+        _, cost = best_formulation(operator(term), term.f, displacement(term), term.lambda, needs)
+        total += isfinite(cost) ? cost : 0.0
     end
-    return nothing
+    return total
 end
 
-function parse_problem(terms::Union{Term, TermSet}, algorithm::T, return_partial::Bool = false) where {T <: IterativeAlgorithm}
-    terms = terms isa TermSet ? terms : TermSet(terms)
+"""
+    match_assumption(assumption, remaining_terms, variables)
+
+Consume a subset of `remaining_terms` with `assumption`, returning
+`(preparation_result, matched_terms)` or `nothing` when no subset satisfies it.
+
+Every subset that prepares is scored and the best one is taken, rather than the first one
+that happens to work. The key is
+
+    (-length(subset), selection_cost(assumption, subset), position in the powerset)
+
+so the primary preference is still "absorb as many terms as possible into one assumption",
+the formulation cost decides between subsets of equal size, and the historical
+powerset position breaks a remaining tie — which makes the result deterministic and
+reproduces the previous first-match choice wherever the costs tie.
+
+Scoring the two layers together is the point: a cheaper formulation is only better if the
+algorithm that gets selected can use it, which is why `selection_cost` asks `assumption`
+what it needs rather than ranking formulations on their own.
+
+Enumeration is pruned rather than exhaustive. `candidate_term_subsets` yields subsets
+largest-first, so `-length(subset)` is non-decreasing: once a subset of size `k` has
+prepared, no smaller subset can beat it and the search stops at the end of that size class.
+"""
+function match_assumption(assumption, remaining_terms, variables)
+    best, best_key = nothing, nothing
+    for (position, term_selection) in enumerate(candidate_term_subsets(remaining_terms))
+        # Prune: sizes are non-increasing, so nothing from here on can beat the incumbent.
+        best_key !== nothing && -length(term_selection) > best_key[1] && break
+        preparation_result = prepare(TermSet(term_selection...), assumption, variables)
+        preparation_result === nothing && continue
+        key = (-length(term_selection), selection_cost(assumption, term_selection), position)
+        if best_key === nothing || key < best_key
+            best, best_key = (preparation_result, term_selection), key
+        end
+    end
+    return best
+end
+
+# The parse of `terms` under `algorithm`, as `(kwargs, remaining_terms, cost)`. `cost` is
+# the summed formulation cost of everything that was consumed, and is what ranks algorithms
+# against each other in `parse_problem(terms)`.
+function parse_terms(terms::TermSet, algorithm)
     assumptions = ProximalAlgorithms.get_assumptions(algorithm)
     variables = extract_variables(terms)
     remaining_terms = terms
     kwargs = Dict{Symbol, Any}()
+    cost = 0.0
     for assumption in assumptions
         match = match_assumption(assumption, remaining_terms, variables)
         if match !== nothing
             preparation_result, matched_terms = match
             remaining_terms = setdiff(remaining_terms, matched_terms)
+            cost += selection_cost(assumption, matched_terms)
             push!(kwargs, preparation_result...)
         end
-        if isempty(remaining_terms)
-            if return_partial
-                return (kwargs, remaining_terms)
-            end
-            return algorithm, kwargs, variables
-        end
+        isempty(remaining_terms) && break
     end
-    return return_partial ? (kwargs, remaining_terms) : nothing
+    return kwargs, remaining_terms, cost
+end
+
+function parse_problem(terms::Union{Term, TermSet}, algorithm::T, return_partial::Bool = false) where {T <: IterativeAlgorithm}
+    terms = terms isa TermSet ? terms : TermSet(terms)
+    kwargs, remaining_terms, _ = parse_terms(terms, algorithm)
+    if return_partial
+        return (kwargs, remaining_terms)
+    end
+    isempty(remaining_terms) || return nothing
+    return algorithm, kwargs, extract_variables(terms)
 end
 
 """
@@ -127,15 +179,24 @@ function unsatisfied_reasons(term, assumptions)
     return reasons
 end
 
+# Auto-selection: the algorithm whose *complete* parse is cheapest, by the same cost model
+# the formulation layer uses, with the order `get_algorithms` advertises breaking ties. The
+# two layers are scored jointly here: an algorithm that asks less of a term (a gradient
+# rather than a prox, say) may let that term take a cheaper formulation, and that shows up
+# in this total.
 function parse_problem(terms::Union{Term, TermSet})
     terms = terms isa TermSet ? terms : TermSet(terms)
-    for algorithm in ProximalAlgorithms.get_algorithms()
-        result = parse_problem(terms, algorithm)
-        if result !== nothing
-            return result
+    variables = extract_variables(terms)
+    best, best_key = nothing, nothing
+    for (position, algorithm) in enumerate(ProximalAlgorithms.get_algorithms())
+        kwargs, remaining_terms, cost = parse_terms(terms, algorithm)
+        isempty(remaining_terms) || continue
+        key = (cost, position)
+        if best_key === nothing || key < best_key
+            best, best_key = (algorithm, kwargs, variables), key
         end
     end
-    return nothing
+    return best
 end
 
 """

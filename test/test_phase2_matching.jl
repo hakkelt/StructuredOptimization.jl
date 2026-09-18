@@ -70,3 +70,152 @@ end
     # ZeroFPR permits nonconvex smooth f, so it parses the same problem.
     @test SO_M.parse_problem(p, ZeroFPR()) !== nothing
 end
+
+# Phase 5 — scored selection at both layers.
+@testset "Phase 5 scored formulation selection" begin
+    Random.seed!(500)
+
+    @testset "the ranking reproduces the branch table" begin
+        n = 6
+        # identity: no operator is applied at all
+        @test SO_M.best_formulation(AbstractOperators.Eye(Float64, (n,)), NormL1(), 0, 1)[1] === :eye
+        # diagonal + squared L2 + no displacement: the operator folds into the weight
+        D = DiagOp(randn(n) .+ 2)
+        @test SO_M.best_formulation(D, SqrNormL2(), 0, 1)[1] === :diagonal_weight
+        # the same with a displacement has nowhere to put it, so the operator stays outside
+        @test SO_M.best_formulation(D, SqrNormL2(), randn(n), 1)[1] === :diagonal
+        @test SO_M.best_formulation(D, NormL1(), 0, 1)[1] === :diagonal
+        # AAᴴ-diagonal: the prox trick beats the normal operator although the latter is
+        # cheaper, because it is the only one of the two with an exact prox
+        dft = SO_M.operator(fft(Variable(8)))
+        @test SO_M.best_formulation(dft, SqrNormL2(), 0, 1)[1] === :aac_diagonal
+        # IndPoint over a general matrix: IndAffine
+        @test SO_M.best_formulation(MatrixOp(randn(4, 10)), IndPoint(randn(4)), 0, 1)[1] === :ind_affine
+        # tall MatrixOp + squared L2: the fused normal operator is the cheaper gradient
+        @test SO_M.best_formulation(MatrixOp(randn(20, 5)), SqrNormL2(), 0, 1)[1] === :normal_op
+        # wide: `LᴴL` acts on the larger space, so the generic formulation wins
+        @test SO_M.best_formulation(MatrixOp(randn(5, 20)), SqrNormL2(), 0, 1)[1] === :precompose
+        # a non-squared-L2 function has no normal-operator formulation at all
+        @test SO_M.best_formulation(MatrixOp(randn(20, 5)), NormL1(), 0, 1)[1] === :precompose
+        # nonlinear
+        @test SO_M.best_formulation(SO_M.operator(sin(Variable(5))), SqrNormL2(), 0, 1)[1] === :nonlinear
+    end
+
+    @testset "needs = :prox filters the gradient-only formulations" begin
+        A = MatrixOp(randn(20, 5))
+        @test SO_M.best_formulation(A, SqrNormL2(), 0, 1, :prox)[1] === :none
+        @test SO_M.best_formulation(A, SqrNormL2(), 0, 1, :any)[1] === :normal_op
+        # ... and an exact-prox formulation is still found when one exists
+        dft = SO_M.operator(fft(Variable(8)))
+        @test SO_M.best_formulation(dft, SqrNormL2(), 0, 1, :prox)[1] === :aac_diagonal
+    end
+
+    # The type-level fuse predicate must agree with the constructing one wherever the
+    # constructing one is consulted; it is allowed to be conservative, never optimistic.
+    @testset "normal_op_fuses agrees with fused_normal_op" begin
+        Random.seed!(501)
+        xf, yf = Variable(10), Variable(7)
+        uf, vf = Variable(50), Variable(100)
+        xs, ys = Variable(5), Variable(5)
+        ops = (
+            MatrixOp(randn(7, 4)),
+            MatrixOp(randn(4, 6)),
+            DiagOp(randn(5)),
+            SO_M.operator(fft(MatrixOp(randn(5, 5)) * Variable(5))),
+            SO_M.extract_operators((xf, yf), ls(randn(25, 10) * xf + randn(25, 7) * yf)),
+            SO_M.extract_operators((xs, ys), ls(MatrixOp(randn(12, 5)) * xs + MatrixOp(randn(12, 4)) * ys[1:4])),
+            SO_M.extract_operators((uf, vf), ls(randn(30, 50) * uf + randn(30, 100) * vf)),
+        )
+        for op in ops
+            predicted = SO_M.normal_op_fuses(op) && SO_M.normal_op_worthwhile(op)
+            @test predicted == (SO_M.fused_normal_op(op) !== nothing)
+        end
+    end
+
+    # The constraint that drove the design: scoring reads static metadata only, so its cost
+    # is independent of the size of the operators it ranks and negligible next to the
+    # optimization pass it selects.
+    @testset "scoring is metadata-only" begin
+        Random.seed!(502)
+        small = MatrixOp(randn(10, 8))
+        big = MatrixOp(randn(800, 600))
+        f = SqrNormL2()
+        SO_M.best_formulation(small, f, 0, 1)   # warm up inference and its cache
+        SO_M.best_formulation(big, f, 0, 1)
+        alloc_small = @allocated SO_M.best_formulation(small, f, 0, 1)
+        alloc_big = @allocated SO_M.best_formulation(big, f, 0, 1)
+        @test alloc_small == alloc_big
+        @test alloc_big == 0
+        # For contrast: answering the same fusing question by construction forms the Gram
+        # matrix — 600×600 here — which is what scoring must not do.
+        @test (@allocated SO_M.fused_normal_op(big)) > 100 * max(alloc_big, 1)
+
+        # ... and in wall-clock terms against the algorithm's own work.
+        n, m = 200, 300
+        A, b = randn(m, n), randn(m)
+        xb = Variable(n)
+        ~xb .= 0.0
+        p = problem(ls(A * xb - b) + 1.0e-2 * norm(xb, 1))
+        alg = ProximalAlgorithms.PANOCplus(maxit = 5, tol = 0.0)
+        assumptions = ProximalAlgorithms.get_assumptions(alg)
+        score_all() = sum(SO_M.selection_cost(a, collect(p)) for a in assumptions)
+        score_all()
+        solve(p, alg)
+        t_score = minimum(@elapsed(score_all()) for _ in 1:20)
+        t_solve = minimum(@elapsed(solve(p, alg)) for _ in 1:3)
+        # Measured ratio on the development machine is ~20x for a five-iteration pass; the
+        # assertion keeps a wide margin because this runs on a shared node.
+        @test t_score < t_solve / 5
+    end
+
+    # `is_aac_diagonal` short-circuits the upstream O(m²n) `isdiag(A*Aᴴ)` for a `MatrixOp`
+    # by disproving row orthogonality on a sample. It must agree with the predicate it
+    # replaces on every operator shape, not merely approximate it.
+    @testset "is_aac_diagonal agrees with is_AAc_diagonal" begin
+        Random.seed!(504)
+        Q = Matrix(qr(randn(6, 6)).Q)
+        aac_ops = (
+            AbstractOperators.Eye(Float64, (5,)),
+            DiagOp(randn(5)),
+            SO_M.operator(fft(Variable(8))),
+            MatrixOp(randn(7, 4)),
+            MatrixOp(randn(4, 7)),
+            MatrixOp(Q[1:4, :]),
+            MatrixOp(reshape([2.0], 1, 1)),
+            AbstractOperators.AffineAdd(MatrixOp(randn(7, 4)), randn(7)),
+        )
+        for op in aac_ops
+            @test SO_M.is_aac_diagonal(op) == is_AAc_diagonal(op)
+        end
+        # An exactly-diagonal-rows matrix is accepted, so the sample is not simply
+        # answering "false" for everything dense.
+        @test SO_M.is_aac_diagonal(MatrixOp([1.0 0.0 0.0; 0.0 2.0 0.0]))
+    end
+
+    # Behaviour preservation: the scored search must still be deterministic, and pick the
+    # same formulations the fixed branch chain did.
+    @testset "parse results are stable" begin
+        Random.seed!(503)
+        xd = Variable(6)
+        Ad, bd = randn(10, 6), randn(10)
+        pd = problem(ls(Ad * xd - bd) + 1.0e-2 * norm(xd, 1))
+        first_parse = SO_M.parse_problem(pd, PANOCplus())
+        second_parse = SO_M.parse_problem(pd, PANOCplus())
+        @test first_parse !== nothing
+        @test Dict(k => typeof(v) for (k, v) in first_parse[2]) ==
+            Dict(k => typeof(v) for (k, v) in second_parse[2])
+        # PANOCplus assumes `f(Ax) + g(x)`, so the least-squares term is split into the
+        # function and its affine operator rather than absorbed, and the ℓ1 term keeps its
+        # prox. This is exactly the choice the fixed branch chain made.
+        @test first_parse[2][:f] isa SqrNormL2
+        @test first_parse[2][:A] isa AbstractOperators.AbstractOperator
+        @test SO_M.is_proximable(first_parse[2][:g])
+
+        # With a purely smooth algorithm there is no operator slot, so the same term must be
+        # absorbed — and the tall, fusing operator makes the normal-operator formulation the
+        # cheapest candidate.
+        smooth_parse = SO_M.parse_problem(problem(ls(Ad * xd - bd)), FastForwardBackward())
+        @test smooth_parse !== nothing
+        @test smooth_parse[2][:f] isa SO_M.SqrNormL2WithNormalOp
+    end
+end
