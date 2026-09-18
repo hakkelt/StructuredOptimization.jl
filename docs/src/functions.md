@@ -23,12 +23,14 @@ maximum
 sumpositive
 hingeloss
 logbarrier
+^
 ```
 
 ## Inequality constraints
 
 ```@docs
 <=
+rank
 ```
 
 ## Equality constraints
@@ -57,6 +59,15 @@ See the [Total Variation demo](https://github.com/hakkelt/StructuredOptimization
 
 ```@docs
 conj
+```
+
+## Collecting terms
+
+Terms add up into a `TermSet`, which is what [`problem`](@ref) returns and what
+[`solve`](@ref) takes.
+
+```@docs
+StructuredOptimization.TermSet
 ```
 
 ## Recording terms for diagnostics

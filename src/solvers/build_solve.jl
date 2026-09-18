@@ -10,16 +10,24 @@ to be fed into the solver.
 
 # Example
 
-```julia
-julia> x = Variable(4)
-Variable(Float64, (4,))
+```jldoctest
+julia> x = Variable(4);
 
-julia> A, b = randn(10,4), randn(10);
+julia> A, b = randn(10, 4), randn(10);
 
-julia> p = problem( ls(A*x - b ) , norm(x) <= 1 );
+julia> p = problem(ls(A * x - b), norm(x) <= 1);
 
-julia> StructuredOptimization.parse_problem(p, PANOCplus());
+julia> _, kwargs, _ = StructuredOptimization.parse_problem(p, ProximalAlgorithms.PANOCplus());
+
+julia> sort(collect(keys(kwargs)))
+3-element Vector{Symbol}:
+ :A
+ :f
+ :g
 ```
+
+The keys are the slots the algorithm's assumptions declare: here a smooth `f` of a linear
+`A`, plus a proximable `g`. A problem that cannot fill them returns `nothing`.
 """
 # Candidate term-subsets for one assumption, in the order they are tried.
 #
@@ -256,10 +264,19 @@ into. An empty result means no available algorithm matches the problem structure
 
 # Example
 
-```julia
+```jldoctest
 julia> x = Variable(4); A, b = randn(10, 4), randn(10);
 
-julia> suggest_algorithm(problem(ls(A*x - b) + 1e-2*norm(x, 1)))
+julia> isempty(suggest_algorithm(problem(ls(A * x - b) + 1.0e-2 * norm(x, 1))))
+false
+
+julia> p = problem(norm(A * x, 1));  # the term is not proximable: prox does not compose
+
+julia> isempty(suggest_algorithm(p))  # but algorithms with an operator slot still take it
+false
+
+julia> ProximalAlgorithms.FastForwardBackward() in suggest_algorithm(p)
+false
 ```
 """
 function suggest_algorithm(terms::Union{Term, TermSet}, algorithms = ProximalAlgorithms.get_algorithms())
@@ -313,18 +330,26 @@ Solves the problem returning a tuple containing the iterations taken and the bui
 
 # Example
 
-```julia
-julia> x = Variable(4)
-Variable(Float64, (4,))
+```jldoctest
+julia> x = Variable(4);
 
-julia> A, b = randn(10,4), randn(10);
+julia> A, b = randn(10, 4), randn(10);
 
-julia> p = problem(ls(A*x - b ), norm(x) <= 1);
+julia> ~x .= 0.0;
 
-julia> solve(p, PANOCplus(); maxit=10);
+julia> p = problem(ls(A * x - b), norm(x) <= 1);
 
-julia> ~x
+julia> vars, it = solve(p, ProximalAlgorithms.PANOCplus(); maxit = 200);
+
+julia> norm(~x) <= 1 + 1.0e-6  # the constraint holds at the returned point
+true
+
+julia> it > 0
+true
 ```
+
+The minimizer is written back into the variables, so `~x` is the answer; the returned tuple
+is `(variables, iterations)`.
 """
 function solve(terms::Union{Term, TermSet}, solvers::Union{<:AbstractVector{<:IterativeAlgorithm}, <:Tuple{Vararg{IterativeAlgorithm}}}; kwargs...)
     terms = terms isa TermSet ? terms : TermSet(terms)
