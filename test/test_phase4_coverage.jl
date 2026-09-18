@@ -196,7 +196,7 @@ end
     c = randn(5)
 
     # SimpleTerm (proximable): multi-term diagnostics with two operators that are not
-    # AAᴴ-diagonal -> the "not AAc diagonal" branch.
+    # AAᴴ-diagonal -> the "absorption would not keep an exact prox" branch.
     simple_prox = ProximalAlgorithms.SimpleTerm(:g => (ProximalCore.is_proximable,))
     ts_overlap = SO4.TermSet(norm(x, 1), norm(A * x, 1))
     @test !isempty(capture(() -> SO4.print_diagnostics(ts_overlap, simple_prox, (x,))))

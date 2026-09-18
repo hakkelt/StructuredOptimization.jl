@@ -205,3 +205,67 @@ end
         @test !SO2.is_proximable(f)
     end
 end
+
+# Phase 2.6 — affine equality is deferred to parse time as well.
+#
+# `==(ex, b)` used to demand a `MatrixOp`, fold it into an `IndAffine` on the spot and
+# return a term over `variables(ex)[1]` alone. It now builds `Term(IndPoint(b), ex)`, so the
+# diagonal and AAᴴ-diagonal absorptions cover the two cases that used to error, the
+# `MatrixOp` case is reproduced exactly by a new `IndPoint` rule, and no variable is lost.
+@testset "Phase 2.6 affine equality at parse time" begin
+    Random.seed!(260)
+
+    absorbed(t) = merge_fo(SO2.operator(t), t.f, SO2.displacement(t), t.lambda)
+
+    @testset "diagonal operator: a trivial projection, used to error" begin
+        a, bb = randn(6) .+ 2, randn(6)
+        xv = Variable(6)
+        t = (a .* xv == bb)
+        @test t.f isa IndPoint
+        g = absorbed(t)
+        @test SO2.is_proximable(g)
+        # The only feasible point is `b ./ a`, so the projection lands there from anywhere.
+        y, v = prox(g, randn(6), 1.0)
+        @test norm(y - bb ./ a) < 1.0e-10
+        @test v == 0.0
+    end
+
+    @testset "AAᴴ-diagonal operator (DFT): used to error" begin
+        xv = Variable(8)
+        x0 = randn(8)
+        bb = fft(x0)
+        t = (fft(xv) == bb)
+        @test t.f isa IndPoint
+        g = absorbed(t)
+        @test SO2.is_proximable(g)
+        # `fft` is injective on ℝ^8, so the feasible set is the single point `x0`.
+        y, v = prox(g, randn(8), 1.0)
+        @test norm(y - x0) < 1.0e-9
+        @test v == 0.0
+    end
+
+    @testset "MatrixOp: same IndAffine as before, from either spelling" begin
+        Am, bm = randn(4, 10), randn(4)
+        xv = Variable(10)
+        for t in (Am * xv == bm, Am * xv - bm == 0)
+            g = absorbed(t)
+            @test g isa IndAffine
+            z = randn(10)
+            y_ref, _ = prox(IndAffine(Am, bm), z, 1.0)
+            y_got, _ = prox(g, z, 1.0)
+            @test norm(y_got - y_ref) < 1.0e-10
+        end
+    end
+
+    @testset "multi-variable equality keeps every variable" begin
+        u, w = Variable(5), Variable(4)
+        Au, Aw, bb = randn(3, 5), randn(3, 4), randn(3)
+        t = (Au * u + Aw * w == bb)
+        @test SO2.variables(t) == (u, w)
+        @test t.f isa IndPoint
+        # The constraint is the one that was written, over the joint domain.
+        op = SO2.extract_operators((u, w), t)
+        zu, zw = randn(5), randn(4)
+        @test op * ArrayPartition(zu, zw) ≈ Au * zu + Aw * zw
+    end
+end

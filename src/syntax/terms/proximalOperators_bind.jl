@@ -359,20 +359,17 @@ Equalities constraints
     Term(IndBinary(lu...), ex)
 # IndBinary
 
-# IndAffine
-function (==)(ex::AbstractExpression, b::Union{Real, AbstractArray})
-    op = operator(ex)
-    d = displacement(ex)
-    if typeof(op) <: MatrixOp
-        A = op.A
-        bb = b .- d
-        p = IndAffine(A, bb)
-        return Term(p, variables(ex)[1])
-    else
-        # TODO change this
-        error("Currently affine equality supported only with `MatrixOp`")
-    end
-end
+# IndPoint, rewritten to IndAffine at parse time where that is the better formulation.
+#
+# The syntax layer builds `λ · f(A·x + d)` triples and nothing else (PLAN.md 2.6): the
+# equality `ex == b` is the indicator of the singleton `{b}` composed with whatever affine
+# expression `ex` happens to be. Folding `A` into an `IndAffine` here would hide it from
+# every later decision — which is what used to make `DiagOp(a)*x == b` and `fft(x) == b`
+# errors, although the first is a trivial projection and the second is AAᴴ-diagonal, and
+# what used to discard every variable of `ex` after the first.
+# `merge_function_with_operator` now picks the formulation, including today's `IndAffine`
+# for a general `MatrixOp`.
+(==)(ex::AbstractExpression, b::Union{Real, AbstractArray}) = Term(IndPoint(b), ex)
 
 # Transforms
 # Convex conjugate

@@ -74,6 +74,30 @@ function get_unseparable_pairs(variable_bags)
     return incompatibilities
 end
 
+# The dense matrix behind `op`, or `nothing` when `op` is not a plain `MatrixOp`. Only a
+# stored matrix can be handed to `IndAffine`, which needs to factorise it.
+_matrix_of(op) = nothing
+_matrix_of(op::MatrixOp) = op.A
+_matrix_of(op::AbstractOperators.AffineAdd) = _matrix_of(AbstractOperators.remove_displacement(op))
+
+"""
+    keeps_exact_prox(op, f)
+
+Whether absorbing `op` into `f` (see [`merge_function_with_operator`](@ref)) leaves a
+function whose `prox!` is still the exact proximal operator of the composition.
+
+This mirrors the branch table of `merge_function_with_operator`: the identity, diagonal and
+AAᴴ-diagonal absorptions all have a closed-form prox (the "prox trick" — `is_AAc_diagonal`
+covers the first two, since `Eye` and `DiagOp` are both AAᴴ-diagonal), and so does the
+`IndPoint` + `MatrixOp` rewrite into `IndAffine`. Everything below that — the normal-operator
+formulation, `Precompose` with a general linear operator, `PrecomposeNonlinear` — implements
+only a gradient, or a `prox!` that is not the prox of the composed function; a solver picked
+on the strength of a prox it does not have would fail at the first iteration.
+
+`op` may carry a displacement (`affine(term)`); it does not affect the answer.
+"""
+keeps_exact_prox(op, f) = is_AAc_diagonal(op) || (f isa IndPoint && _matrix_of(op) !== nothing)
+
 function merge_function_with_operator(op, f, disp, λ)
     if is_eye(op)
         f = disp == 0 ? f : PrecomposeDiagonal(f, 1.0, disp)
@@ -91,6 +115,11 @@ function merge_function_with_operator(op, f, disp, λ)
         end
     elseif is_AAc_diagonal(op)
         f = Precompose(f, op, diag_AAc(op), disp)
+    elseif f isa IndPoint && _matrix_of(op) !== nothing
+        # `IndPoint(p)(A·x + d)` is the indicator of `{x : A·x = p - d}`, which `IndAffine`
+        # solves exactly (it factorises `A` once and projects). This is the formulation
+        # `==(ex, b)` used to build in the syntax layer.
+        f = IndAffine(_matrix_of(op), f.p .- disp)
     elseif is_linear(op)
         # we assume that prox will not be called on this term because it will not give a valid result
         # Since only the gradient is ever asked of this branch, a squared L2 norm whose
@@ -117,7 +146,7 @@ unsatisfied_properties(term, assumptions::ProximalAlgorithms.AssumptionItem) = [
 does_satisfy(term, assumptions::ProximalAlgorithms.AssumptionItem) = all(property_func(term) for property_func in assumptions.second)
 
 function prepare(term::Term, assumption::ProximalAlgorithms.SimpleTerm, variables::NTuple{N, Variable}) where {N}
-    if does_satisfy(term, assumption.func) && (!(ProximalCore.is_proximable in assumption.func.second) || is_AAc_diagonal(affine(term)))
+    if does_satisfy(term, assumption.func) && (!(ProximalCore.is_proximable in assumption.func.second) || keeps_exact_prox(affine(term), term.f))
         op = extract_operators(variables, term)
         disp = displacement(term)
         return (assumption.func.first => merge_function_with_operator(op, term.f, disp, term.lambda),)
@@ -130,7 +159,10 @@ function print_diagnostics(term::Term, assumption::ProximalAlgorithms.SimpleTerm
     repr = term.repr !== nothing ? term.repr : string(term)
     problematic_properties = unsatisfied_properties(term, assumption.func)
     return if length(problematic_properties) == 0
-        println("Term $repr satisfies all required properties, but the following operator is not AAc diagonal: ", affine(term))
+        println(
+            "Term $repr satisfies all required properties, but absorbing the following operator ",
+            "would not keep an exact prox: ", affine(term)
+        )
     else
         println("Term $repr does not satisfy required property: $(join(problematic_properties, ", "))")
     end
@@ -179,7 +211,7 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.SimpleTerm, vari
         return nothing
     end
     if ProximalCore.is_proximable in assumption.func.second
-        if any(!is_AAc_diagonal(affine(term)) for term in terms)
+        if any(!keeps_exact_prox(affine(term), term.f) for term in terms)
             return nothing
         end
         variable_bags = group_by_variables(terms)
@@ -238,10 +270,10 @@ function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.Simple
         repr = problematic_term.repr !== nothing ? problematic_term.repr : string(problematic_term)
         problematic_properties = unsatisfied_properties(problematic_term, assumption.func)
         println("Term $repr does not satisfy required property: $(join(problematic_properties, ", "))")
-    elseif any(term -> !is_AAc_diagonal(affine(term)), terms)
-        println("The following terms contains operators that are not AAc diagonal:")
+    elseif any(term -> !keeps_exact_prox(affine(term), term.f), terms)
+        println("The following terms have operators whose absorption would not keep an exact prox:")
         for term in terms
-            if !is_AAc_diagonal(affine(term))
+            if !keeps_exact_prox(affine(term), term.f)
                 repr = term.repr !== nothing ? term.repr : string(term)
                 println(" - $repr")
             end

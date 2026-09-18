@@ -158,14 +158,27 @@ cf = x == lu
 @test cf.lambda == 1
 @test cf.f(~x) == (IndBinary(lu...))(~x)
 
-# IndAffine
-cf = A*x-b == 0
-@test cf.lambda == 1
-@test cf.f(~x) == (IndAffine(A,b))(~x)
+# IndPoint, absorbed into IndAffine at parse time (see merge_function_with_operator).
+# The syntax layer keeps the operator outside the function now, so the equality is
+# checked on the absorbed function rather than on `cf.f` directly.
+absorb(cf) = StructuredOptimization.merge_function_with_operator(
+    StructuredOptimization.operator(cf), cf.f, StructuredOptimization.displacement(cf), cf.lambda
+)
 
-cf = (A*x == b)
-@test cf.lambda == 1
-@test cf.f(~x) == (IndAffine(A,-b))(~x)
+# `A*x - b == 0` and `A*x == b` are the same constraint, so both absorb to IndAffine(A, b).
+# Asserted on the prox (the projection), not on the value: the indicator is `Inf` at almost
+# every point, which makes a value comparison vacuous.
+for cf in (A*x-b == 0, A*x == b)
+    @test cf.lambda == 1
+    @test cf.f isa IndPoint
+    g = absorb(cf)
+    @test g isa IndAffine
+    y_ref, _ = prox(IndAffine(A, b), ~x, 1.0)
+    y_got, _ = prox(g, ~x, 1.0)
+    @test norm(y_got - y_ref) < 1e-10
+    @test norm(A*y_got - b) < 1e-10
+    @test g(y_got) == 0.0
+end
 
 cf = 2*norm(x,1)
 ccf = conj(cf)
@@ -324,9 +337,20 @@ end
 let x = Variable(4)
     @test_throws ErrorException norm(x, 3)
     @test_throws ErrorException (x in [1.0, 2.0, 3.0])
+    # An AAᴴ-diagonal affine equality used to be rejected outright ("Currently affine
+    # equality supported only with `MatrixOp`"); it is now deferred to parse time, where
+    # the AAᴴ-diagonal absorption gives it an exact projection onto `{x : fft(x) = 0}`.
     x_c = Variable(zeros(ComplexF64, 4))
     ex = fft(x_c)
-    @test_throws ErrorException (ex == 0.0)
+    t_eq = (ex == 0.0)
+    @test t_eq.f isa IndPoint
+    g_eq = StructuredOptimization.merge_function_with_operator(
+        StructuredOptimization.operator(t_eq), t_eq.f,
+        StructuredOptimization.displacement(t_eq), t_eq.lambda
+    )
+    y_eq, v_eq = prox(g_eq, randn(ComplexF64, 4), 1.0)
+    @test norm(y_eq) < 1e-12
+    @test v_eq == 0.0
 end
 
 # proximalOperators_bind.jl — ls's normal-op path with single-variable expression
