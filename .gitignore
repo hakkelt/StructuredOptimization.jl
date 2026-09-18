@@ -19,3 +19,4 @@ Manifest.toml
 *.cov
 coverage/
 coverage_html/
+gpu_env/

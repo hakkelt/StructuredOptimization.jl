@@ -99,11 +99,7 @@ end
 _weighted_sqnorm(lambda::Real, d) = lambda * real(dot(d, d))
 function _weighted_sqnorm(lambda::AbstractArray, d)
     R = real(eltype(d))
-    sqnorm = R(0)
-    for k in eachindex(d)
-        sqnorm += lambda[k] * abs2(d[k])
-    end
-    return sqnorm
+    return R(sum(real.(lambda .* abs2.(d))))
 end
 
 # `σ` from the docstring, as `1/σ`: `Re⟨A u, A u⟩ / Re⟨u, (A'A) u⟩` for a probe `u`, with the

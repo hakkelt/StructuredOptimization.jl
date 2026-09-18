@@ -48,6 +48,10 @@ Random.seed!(0)
 		include("test_usage.jl")
 	end
 
+	@testset "GPU" begin
+		include("test_gpu.jl")
+	end
+
 
 	@testset "Aqua" begin
 		Aqua.test_all(StructuredOptimization; ambiguities=false, piracies=false, persistent_tasks=false)
