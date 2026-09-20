@@ -304,28 +304,35 @@ let y2 = Variable(10)
     @test !isnothing(sol)
 end
 
-# normalop_ls with a multi-variable expression: previously a confusing
+# ls with a multi-variable expression: previously a confusing
 # `MethodError: no method matching length(::AffineAdd{HCAT{...}})`.
 let y2 = Variable(10)
-    t_nls_multi = normalop_ls(A2 * x2 + A2 * y2)
-    @test t_nls_multi.f isa StructuredOptimization.SqrNormL2WithNormalOp
+    t_nls_multi = ls(A2 * x2 + A2 * y2)
     @test StructuredOptimization.is_strongly_convex(t_nls_multi) == false
 
+    # Absorption is deferred to parse time: `merge_function_with_operator` is what picks
+    # the normal-op formulation, not `ls` itself. This is the shared-encoding-operator
+    # case (`𝒜*(x+y)`), so it should win.
+    op_multi = StructuredOptimization.operator(t_nls_multi)
+    f_abs = StructuredOptimization.merge_function_with_operator(
+        op_multi, t_nls_multi.f, StructuredOptimization.displacement(t_nls_multi), t_nls_multi.lambda,
+    )
+    @test f_abs isa StructuredOptimization.SqrNormL2WithNormalOp
+
     # gradient matches the plain-ls formulation exactly
-    op_multi = StructuredOptimization.extract_operators((x2, y2), t_nls_multi)
-    @test AbstractOperators.is_eye(op_multi)
     xv, yv = randn(10), randn(10)
     gy = ArrayPartition(zeros(10), zeros(10))
-    StructuredOptimization.gradient!(gy, t_nls_multi.f, ArrayPartition(xv, yv))
+    StructuredOptimization.gradient!(gy, f_abs, ArrayPartition(xv, yv))
     expected = A2' * (A2 * (xv + yv))
     @test gy.x[1] ≈ expected
     @test gy.x[2] ≈ expected
 
-    # end-to-end: solving with normalop_ls reaches the same minimizer as ls
+    # end-to-end: solving with ls's normal-op formulation reaches the same minimizer
+    # as the plain ls path
     nrmA2 = opnorm(A2)
     b2 = randn(5)
     x2a, y2a = Variable(10), Variable(10)
-    p_nop = problem(normalop_ls(A2 * x2a + A2 * y2a - b2), 0.05 * norm(x2a, 1), 0.05 * norm(y2a, 2))
+    p_nop = problem(ls(A2 * x2a + A2 * y2a - b2), 0.05 * norm(x2a, 1), 0.05 * norm(y2a, 2))
     solve(p_nop, ProximalAlgorithms.FastForwardBackward(Lf = 2 * nrmA2^2, maxit = 2000, tol = 1.0e-10))
     x2b, y2b = Variable(10), Variable(10)
     p_ls2 = problem(ls(A2 * x2b + A2 * y2b - b2), 0.05 * norm(x2b, 1), 0.05 * norm(y2b, 2))
@@ -335,8 +342,8 @@ let y2 = Variable(10)
 end
 
 # HCAT normal-op fusion: when every block is the *same* operator (the shared-
-# encoding-operator multi-component case, e.g. 𝒜*(x+y)), normalop_ls must
-# reuse 𝒜's own fast normal operator instead of applying 𝒜 once per block.
+# encoding-operator multi-component case, e.g. 𝒜*(x+y)), ls's normal-op formulation
+# must reuse 𝒜's own fast normal operator instead of applying 𝒜 once per block.
 let Ashared = MatrixOp(randn(8, 6)), xs = Variable(6), ys = Variable(6)
     ex_shared = Ashared * xs + Ashared * ys
     @test AbstractOperators.has_optimized_normalop(ex_shared.L)
@@ -350,7 +357,7 @@ let Ashared = MatrixOp(randn(8, 6)), xs = Variable(6), ys = Variable(6)
     bsh = randn(8)
     nrmAsh = opnorm(Ashared)
     xs2, ys2 = Variable(6), Variable(6)
-    p_shared = problem(normalop_ls(Ashared * xs2 + Ashared * ys2 - bsh), 0.05 * norm(xs2, 1), 0.05 * norm(ys2, 2))
+    p_shared = problem(ls(Ashared * xs2 + Ashared * ys2 - bsh), 0.05 * norm(xs2, 1), 0.05 * norm(ys2, 2))
     solve(p_shared, ProximalAlgorithms.FastForwardBackward(Lf = 2 * nrmAsh^2, maxit = 2000, tol = 1.0e-10))
     xs3, ys3 = Variable(6), Variable(6)
     p_ls_shared = problem(ls(Ashared * xs3 + Ashared * ys3 - bsh), 0.05 * norm(xs3, 1), 0.05 * norm(ys3, 2))
