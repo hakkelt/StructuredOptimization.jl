@@ -11,9 +11,3 @@ ProximalOperators = "a725b495-10eb-56fe-b38b-717eba820537"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 RecursiveArrayTools = "731186ca-8d62-57ce-b412-fbd966d074cd"
 StructuredOptimization = "46cd3e9d-64ff-517d-a929-236bc1a1fc9d"
-
-# Mirrors the package's own [sources] so the suite benchmarks the same code the tests run
-# against. `benchpkg` overrides the StructuredOptimization entry with the revision under
-# test, which is the point of keeping it here. Like the root Project.toml, these are local
-# development checkouts; the benchmark CI job depends on them resolving exactly as the test
-# job does.
