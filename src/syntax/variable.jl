@@ -1,35 +1,37 @@
 import Base: convert, size, eltype, ~
-export Variable
+export Variable, get_name
 
-struct Variable{T, N, A <: AbstractArray{T,N}} <: AbstractExpression
-	x::A
+struct Variable{T, N, A <: AbstractArray{T, N}} <: AbstractExpression
+    x::A
+    name::String
+    function Variable(x::AbstractArray{T, N}; name::String = "x") where {T, N}
+        A = typeof(x)
+        return new{T, N, A}(x, name)
+    end
 end
 
 # constructors
 """
-	Variable([T::Type,] dims...)
+	Variable([T::Type,] dims...; name::String="x")
+  Variable(x::AbstractArray; name::String="x")
 
-Returns a `Variable` of dimension `dims` initialized with an array of all zeros.
-
-`Variable(x::AbstractArray)`
-
-Returns a `Variable` of dimension `size(x)` initialized with `x`
+Creates an optimization variable of type `T` and dimensions `dims...`, or from the provided array `x`.
+The optional `name` argument allows to specify a name for the variable, which is useful for display purposes.
 
 """
-function Variable(T::Type, args::Vararg{I,N}) where {I <: Integer,N}
-	Variable{T,N,Array{T,N}}(zeros(T, args...))
+function Variable(T::Type, args::Int...; name::String = "x")
+    return Variable(zeros(T, args...); name)
 end
 
-function Variable(args::Vararg{I}) where {I <: Integer}
-  Variable(zeros(args...))
+function Variable(args::Int...; name::String = "x")
+    return Variable(zeros(args...); name)
 end
 
 # Utils
 
 function Base.show(io::IO, x::Variable)
-  print(io, "Variable($(eltype(x.x)), $(size(x.x)))")
+    return print(io, "Variable($(eltype(x.x)), $(size(x.x)), \"$(x.name)\")")
 end
-
 
 """
 	~(x::Variable)
@@ -38,7 +40,7 @@ Returns the `Array` of the variable `x`
 """
 ~(x::Variable) = x.x
 ~(x::Tuple{Variable}) = (~)(x[1])
-~(x::NTuple{N,Variable}) where {N} = ArrayPartition((~).(x))
+~(x::NTuple{N, Variable}) where {N} = ArrayPartition((~).(x))
 
 """
 size(x::Variable, [dim...])
@@ -46,7 +48,7 @@ size(x::Variable, [dim...])
 Like `size(A::AbstractArray, [dims...])` returns the tuple containing the dimensions of the variable `x`.
 """
 size(x::Variable) = size(x.x)
-size(x::Variable, dim::I) where { I <: Integer} = size(x.x, dim)
+size(x::Variable, dim::Integer) = size(x.x, dim)
 
 """
 eltype(x::Variable)
@@ -54,3 +56,10 @@ eltype(x::Variable)
 Like `eltype(x::AbstractArray)` returns the type of the elements of `x`.
 """
 eltype(x::Variable) = eltype(x.x)
+
+"""
+get_name(x::Variable)
+
+Returns the name of the variable `x`. If no name was provided at construction, returns `"x"`.
+"""
+get_name(x::Variable) = x.name

@@ -1,13 +1,115 @@
+_scalar_codomain_type(T::Type) = T
+_scalar_codomain_type(t::Tuple) = _scalar_codomain_type(t[1])
+
 struct Term{T1 <: Real, T2, T3 <: AbstractExpression}
     lambda::T1
     f::T2
     A::T3
-    Term(lambda::T1, f::T2, ex::T3) where {T1,T2,T3} = new{T1,T2,T3}(lambda,f,ex)
+    repr::Union{String, Nothing}
+    function Term(lambda::T1, f::T2, A::T3, repr::Union{String, Nothing}) where {T1 <: Real, T2, T3 <: AbstractExpression}
+        # codomain_type is a (possibly nested) Tuple of types for a multi-domain codomain
+        # (e.g. the block-identity built by multi-variable `ls`'s normal-op path); such an operator
+        # is only ever allowed as an Expression when `is_eye`, so every block shares one
+        # type — take it directly.
+        T1_ = real(_scalar_codomain_type(codomain_type(affine(A))))
+        lambda = convert(T1_, lambda)
+        return new{T1_, T2, T3}(lambda, f, A, repr)
+    end
+end
+
+function Term(lambda, f, ex::AbstractExpression)
+    return Term(lambda, f, ex, nothing)
 end
 
 function Term(f, ex::AbstractExpression)
-    A = convert(Expression,ex)
-    Term(1,f, A)
+    A = convert(Expression, ex)
+    return Term(1, f, A)
+end
+
+function Term(f, ex::AbstractExpression, repr::String)
+    A = convert(Expression, ex)
+    return Term(1, f, A, repr)
+end
+
+function Term(t::Term, repr::String)
+    return Term(t.lambda, t.f, t.A, repr)
+end
+
+"""
+    TermSet(terms::Term...)
+
+A sum of `Term`s: the whole optimization problem, objective and constraints together (a
+constraint is a term whose function is a set indicator).
+
+`TermSet` is what `+` on terms produces and what [`problem`](@ref) returns, so it is rarely
+constructed directly. It iterates over its terms, supports `length` and integer indexing,
+and is what [`solve`](@ref), [`suggest_algorithm`](@ref) and [`print_diagnostics`](@ref)
+take. Multiplying by a scalar scales every term and gives back a `TermSet`.
+
+```julia
+julia> x = Variable(4); A, b = randn(10, 4), randn(10);
+
+julia> ts = ls(A * x - b) + 1e-2 * norm(x, 1)
+
+julia> length(ts), ts[1] isa StructuredOptimization.Term
+```
+
+See also [`problem`](@ref), [`@term`](@ref).
+"""
+struct TermSet{N, T}
+    terms::T
+    function TermSet(terms...)
+        @assert all(t -> t isa Term, terms) "All elements must be of type Term"
+        return new{length(terms), typeof(terms)}(terms)
+    end
+end
+
+function Base.iterate(t::TermSet{N}, state = 1) where {N}
+    if state > N
+        return nothing
+    else
+        return (t.terms[state], state + 1)
+    end
+end
+
+Base.length(::TermSet{N}) where {N} = N
+Base.getindex(t::TermSet{N}, i::Int) where {N} = t.terms[i]
+
+Term(t::TermSet, ::String) = t
+
+import Base: ==, show
+
+# Ignore the repr when comparing terms
+==(t1::Term, t2::Term) = t1.lambda == t2.lambda && t1.f == t2.f && t1.A == t2.A
+
+function show(io::IO, t::Term)
+    return if t.repr !== nothing
+        print(io, t.repr)
+    else
+        print(io, t.lambda, " * ", t.f, "(", t.A, ")")
+    end
+end
+
+function show(io::IO, t::TermSet)
+    non_indicator_terms = filter(x -> !is_set_indicator(x), t.terms)
+    indicator_terms = filter(is_set_indicator, t.terms)
+    for i in 1:length(non_indicator_terms)
+        show(io, non_indicator_terms[i])
+        if i < length(non_indicator_terms)
+            print(io, " + ")
+        end
+    end
+    return if !isempty(indicator_terms)
+        if !isempty(non_indicator_terms)
+            print(io, " s.t. ")
+        end
+        for i in 1:length(indicator_terms)
+            show(io, indicator_terms[i])
+            if i < length(indicator_terms)
+                print(io, ", ")
+            end
+        end
+    end
 end
 
 # Operations
@@ -16,24 +118,22 @@ end
 
 import Base: +
 
-(+)(a::Term,b::Term) = (a,b)
-(+)(a::NTuple{N,Term},b::Term)    where {N} = (a...,b)
-(+)(a::Term,b::NTuple{N,Term})    where {N} = (a,b...)
-(+)(a::NTuple{N,Term},b::Tuple{}) where {N} = a
-(+)(a::Tuple{},b::NTuple{N,Term}) where {N} = b
-(+)(a::NTuple{N,Term},b::NTuple{M,Term}) where {N,M} = (a...,b...)
+(+)(a::Term, b::Term) = TermSet(a, b)
+(+)(a::TermSet, b::Term) = TermSet(a..., b)
+(+)(a::Term, b::TermSet) = TermSet(a, b...)
+(+)(a::TermSet, b::TermSet) = TermSet(a..., b...)
 
 # Define multiplication by constant
 
 import Base: *
 
-function (*)(a::T1, t::Term{T,T2,T3}) where {T1<:Real, T, T2, T3}
-    coeff = *(promote(a,t.lambda)...)
-    Term(coeff, t.f, t.A)
+function (*)(a::T1, t::Term{T, T2, T3}) where {T1 <: Real, T, T2, T3}
+    coeff = *(promote(a, t.lambda)...)
+    return Term(coeff, t.f, t.A, t.repr)
 end
 
-function (*)(a::T1, t::T2) where {T1<:Real, N, T2 <: Tuple{Vararg{<:Term,N}} }
-    return a.*t
+function (*)(a::T1, t::TermSet) where {T1 <: Real}
+    return TermSet((a * ti for ti in t)...)
 end
 
 # Properties
@@ -44,49 +144,64 @@ affine(t::Term) = affine(t.A)
 displacement(t::Term) = displacement(t.A)
 
 #importing properties from ProximalOperators
-import ProximalOperators:
-              is_affine,
-              is_cone,
-              is_convex,
-              is_generalized_quadratic,
-              is_prox_accurate,
-              is_quadratic,
-              is_separable,
-              is_set,
-              is_singleton,
-              is_smooth,
-              is_strongly_convex
+import ProximalCore:
+    is_affine_indicator,
+    is_cone_indicator,
+    is_convex,
+    is_generalized_quadratic,
+    is_proximable,
+    is_quadratic,
+    is_separable,
+    is_set_indicator,
+    is_singleton_indicator,
+    is_smooth,
+    is_locally_smooth,
+    is_strongly_convex
 
-#importing properties from AbstractOperators
-is_f = [:is_linear,
-        :is_eye,
-        :is_null,
-        :is_diagonal,
-        :is_AcA_diagonal,
-        :is_AAc_diagonal,
-        :is_orthogonal,
-        :is_invertible,
-        :is_full_row_rank,
-        :is_full_column_rank,
-        :is_sliced
-       ]
+is_func_f = [:is_set_indicator, :is_singleton_indicator, :is_smooth, :is_locally_smooth]
 
-for f in is_f
+for f in is_func_f
     @eval begin
-        import AbstractOperators: $f
-        $f(t::Term) = $f(operator(t))
-        $f(t::NTuple{N,Term}) where {N} = all($f.(t))
+        import ProximalCore: $f
+        $f(t::Term) = $f(t.f)
+        $f(t::TermSet) = all($f.(t.terms))
     end
 end
 
-is_smooth(t::Term) = is_smooth(t.f)
-is_convex(t::Term)    = is_convex(t.f) && is_linear(t)
+#importing properties from AbstractOperators
+is_op_f = [
+    :is_linear,
+    :is_eye,
+    :is_null,
+    :is_diagonal,
+    :is_AcA_diagonal,
+    :is_AAc_diagonal,
+    :is_orthogonal,
+    :is_invertible,
+    :is_full_row_rank,
+    :is_full_column_rank,
+    :is_sliced,
+]
+
+for f in is_op_f
+    @eval begin
+        import AbstractOperators: $f
+        $f(t::Term) = $f(operator(t))
+        $f(t::TermSet) = all($f.(t))
+    end
+end
+
+is_affine_indicator(t::Term) = is_affine_indicator(t.f) && is_linear(t)
+is_cone_indicator(t::Term) = is_cone_indicator(t.f) && is_linear(t)
+is_convex(t::Term) = is_convex(t.f) && is_linear(t)
 is_quadratic(t::Term) = is_quadratic(t.f) && is_linear(t)
+is_generalized_quadratic(t::Term) = is_generalized_quadratic(t.f) && is_linear(t)
 is_strongly_convex(t::Term) = is_strongly_convex(t.f) && is_full_column_rank(operator(t.A))
+is_separable(t::Term) = is_separable(t.f) && is_diagonal(operator(t.A))
 
 include("proximalOperators_bind.jl")
 
 # other stuff, to make Term work with iterators
 import Base: iterate, isempty
 iterate(t::Term, state = true) = state ? (t, false) : nothing
-isempty(t::Term) =  false
+isempty(t::Term) = false
