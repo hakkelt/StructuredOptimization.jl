@@ -834,12 +834,21 @@ function prepare(terms::TermSet, assumption::ProximalAlgorithms.RepeatedOperator
             return nothing
         end
         function_results = (function_results..., result[1].second)
-        operator_results = (operator_results..., result[2].second)
+        operator_results = (operator_results..., _operator_or_eye(result, variables))
     end
     return (
         assumption.func.first => function_results,
         assumption.operator.first => operator_results,
     )
+end
+
+# The operator a term was prepared with. A term that fell back to a simple term over a single
+# variable comes without one (an algorithm's own operator slot defaults to the identity), but the
+# operators of repeated terms are collected one per term, so the identity is spelled out.
+function _operator_or_eye(result, variables::NTuple{N, Variable}) where {N}
+    length(result) > 1 && return result[2].second
+    example_input = N > 1 ? ArrayPartition(Tuple(~var for var in variables)) : ~variables[1]
+    return AbstractOperators.Eye(example_input)
 end
 
 function print_diagnostics(terms::TermSet, assumption::ProximalAlgorithms.RepeatedOperatorTerm, variables::NTuple{N, Variable}) where {N}
