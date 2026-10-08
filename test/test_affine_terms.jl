@@ -44,9 +44,9 @@ using ProximalAlgorithms: PANOC, ChambollePock, FastForwardBackward
         xc = D \ c
         w = Variable(n)
         ~w .= 0
-        # `ChambollePock` is an AFBA iteration, which takes the least-squares term as its smooth
-        # `f` and then needs that term's Lipschitz constant.
-        cp() = ChambollePock(maxit = 20000, tol = 1.0e-10, beta_f = 1.0)
+        # `ChambollePock` stacks both terms into its `h ∘ L`; it has no smooth part, so there is no
+        # Lipschitz constant to supply.
+        cp() = ChambollePock(maxit = 20000, tol = 1.0e-10)
         solve(problem(ls(w - (y - xc)), λ * norm(D * w, 1)), cp())
         reference = ~w + xc
         x = Variable(n)
