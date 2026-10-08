@@ -46,15 +46,21 @@ candidate_term_subsets(remaining_terms) = reverse(collect(powerset(remaining_ter
 # operator — a field access — and the trait predicates, so it neither builds an operator nor
 # touches an array; the whole score of a problem costs a few dozen type queries against the
 # thousands of operator applications of the optimization pass it selects.
+#
+# A term no formulation fits is one the assumption takes with its operator in a slot of its
+# own (`h ∘ L` of a primal-dual method): the algorithm then applies the operator and its
+# adjoint every iteration, which is the generic `:precompose` cost, not nothing.
 function selection_cost(assumption, term_selection)
     needs = needs_prox(assumption) ? :prox : :any
     total = 0.0
     for term in term_selection
         _, cost = best_formulation(operator(term), term.f, displacement(term), term.lambda, needs)
-        total += isfinite(cost) ? cost : 0.0
+        total += isfinite(cost) ? cost : _separate_operator_cost(operator(term))
     end
     return total
 end
+
+_separate_operator_cost(op) = is_eye(op) ? 0.0 : 2.0
 
 """
     match_assumption(assumption, remaining_terms, variables)
