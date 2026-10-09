@@ -47,6 +47,8 @@ makedocs(
     # exists.
     modules = [StructuredOptimization],
     checkdocs = :all,
+    # An integration branch collects work in progress; its docs deploy even while incomplete.
+    warnonly = Symbol.(split(get(ENV, "DOCUMENTER_WARNONLY", ""), ','; keepempty = false)),
     format = Documenter.HTML(),
     # Phase 0.3: run every docstring/doc code block as a doctest in CI.
     doctest = true,
