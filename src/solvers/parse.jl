@@ -233,6 +233,10 @@ syntax layer builds `λ · f(A·x + d)` triples and nothing else (PLAN.md 2.6).
 """
 function merge_function_with_operator(op, f, disp, λ; needs::Symbol = :any)
     kind, _ = best_formulation(op, f, disp, λ, needs)
+    # A dry run only asks whether a problem parses, which the formulation cannot change, so
+    # the two formulations that build something expensive (a normal operator, a
+    # factorization) are left unbuilt.
+    _is_dry_run() && (kind === :normal_op || kind === :ind_affine) && return f
     if kind === :normal_op
         # Scoring used the type-level fuse predicate, which is deliberately conservative but
         # can still be optimistic where inference sees a fusing product that the operator's
@@ -681,10 +685,10 @@ function prepare(term::Term, assumption::ProximalAlgorithms.LeastSquaresTerm, va
     # correct *relative* weight, scale the residual by √λ, not by λ.
     c = sqrt(lambda)
     # `AᴴA` is only worth having when the algorithm asks for it and the operator is not about
-    # to be rescaled — `(cA)ᴴ(cA) ≠ AᴴA`, so a cached one would no longer match. Both tests are
-    # free, and they come first so that the `SqrNormL2` branch below never pays to build a
-    # normal operator it would immediately discard.
-    want_aha = assumption.AHA !== nothing && c == 1
+    # to be rescaled — `(cA)ᴴ(cA) ≠ AᴴA`, so a cached one would no longer match — and this is
+    # not a dry run. The tests are free, and they come first so that the `SqrNormL2` branch
+    # below never pays to build a normal operator it would immediately discard.
+    want_aha = assumption.AHA !== nothing && c == 1 && !_is_dry_run()
     if want_aha && f isa ProximalOperators.SqrNormL2
         # Absorption to the normal-op formulation happens at `merge_function_with_operator`
         # time, not when `ls` builds the term, so `f` is always the plain `SqrNormL2` here.
