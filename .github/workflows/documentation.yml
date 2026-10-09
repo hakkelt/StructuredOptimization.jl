@@ -1,0 +1,48 @@
+name: Documentation
+
+on:
+  push:
+    branches: [master, integration]
+    tags: ['*']
+  pull_request:
+
+jobs:
+  docs:
+    permissions:
+      contents: write
+      statuses: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      # `integration` needs versions of the sibling forks that are not registered yet.
+      - name: Use the sibling forks' integration branches
+        if: github.ref_name == 'integration'
+        shell: julia --color=yes {0}
+        run: |
+          using Pkg
+          Pkg.Registry.add("General")
+          forks = [
+                ("OperatorCore", "OperatorCore.jl", nothing),
+                ("AbstractOperators", "AbstractOperators.jl", nothing),
+                ("FFTWOperators", "AbstractOperators.jl", "FFTWOperators"),
+                ("DSPOperators", "AbstractOperators.jl", "DSPOperators"),
+                ("ProximalOperators", "ProximalOperators.jl", nothing),
+                ("ProximalAlgorithms", "ProximalAlgorithms.jl", nothing),
+          ]
+          own = Pkg.TOML.parsefile("Project.toml")["name"]
+          for env in (".", "docs")
+              Pkg.activate(env)
+              env == "docs" && own in keys(Pkg.project().dependencies) && Pkg.rm(own)
+              deps = keys(Pkg.project().dependencies)
+              foreach(f -> f[1] in deps && Pkg.compat(f[1], nothing), forks)
+              Pkg.add([PackageSpec(; url = "https://github.com/hakkelt/" * repo, rev = "integration", subdir) for (_, repo, subdir) in forks])
+          end
+      - uses: julia-actions/julia-docdeploy@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_DEVBRANCH: ${{ github.ref_name == 'integration' && 'integration' || 'master' }}
+          DOCUMENTER_WARNONLY: ${{ github.ref_name == 'integration' && 'missing_docs,cross_references,doctest' || '' }}
